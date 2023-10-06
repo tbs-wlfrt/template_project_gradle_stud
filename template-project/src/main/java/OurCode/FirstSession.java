@@ -1,9 +1,6 @@
-package buttonExample;
+package OurCode;
 
-import ev3dev.actuators.lego.motors.EV3LargeRegulatedMotor;
 import ev3dev.actuators.lego.motors.EV3MediumRegulatedMotor;
-import ev3dev.sensors.ev3.EV3ColorSensor;
-import ev3dev.sensors.ev3.EV3TouchSensor;
 import ev3dev.sensors.ev3.EV3UltrasonicSensor;
 import lejos.hardware.port.MotorPort;
 import lejos.hardware.port.SensorPort;
@@ -12,7 +9,7 @@ import lejos.utility.Delay;
 
 //import jason.asSyntax.Literal;
 
-public class firstTest {
+public class FirstSession {
 
     //static final EV3ColorSensor sensor = new EV3ColorSensor(SensorPort.S1); //drop sensor
     //static boolean call_mode = false;                                        //drop sensor

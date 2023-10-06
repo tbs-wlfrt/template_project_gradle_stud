@@ -1,3 +1,5 @@
+package OurCode;
+
 public class Turner{
 
     /**
@@ -18,7 +20,7 @@ public class Turner{
      */
     public static double calculateInPlace(int degrees, float wheelRadius, float trackSize){
         double bigCircumference = trackSize * Math.PI;
-        double wheelCircumference = wheelDiameter * Math.PI;
+        double wheelCircumference = wheelRadius * Math.PI;
         //travel distance required for vehicle to rotate 1 degree = bigCircumference/360
         double travelDistance = (bigCircumference/360) * degrees;
         double wheelRotation = travelDistance/wheelCircumference * 360;
