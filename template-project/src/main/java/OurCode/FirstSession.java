@@ -10,15 +10,16 @@ import lejos.utility.Delay;
 public class FirstSession {
 
     // TODO: Find out which of these is left and which of these is right and add the code here.
-    // The declaration of the motors.
-    static EV3MediumRegulatedMotor motor1 = new EV3MediumRegulatedMotor(MotorPort.B);
-    static EV3MediumRegulatedMotor motor2 = new EV3MediumRegulatedMotor(MotorPort.C);
+    static EV3MediumRegulatedMotor motor1 = new EV3MediumRegulatedMotor(MotorPort.B); // left
+    static EV3MediumRegulatedMotor motor2 = new EV3MediumRegulatedMotor(MotorPort.C); // right
     // The declaration of the ultrasonic sensor.
     static EV3UltrasonicSensor ultrasonicSensor = new EV3UltrasonicSensor(SensorPort.S1);
 
     // Interval used to sleep between consecutive commands.
     static int sleepIntervalInMilliSeconds = 5;
 
+
+    // TODO: Move these out into another file maybe?
     /**
      * This is needed to sync the java code with the slower mindstorms robot.
      * This needs to be called after each operation.
@@ -137,28 +138,60 @@ public class FirstSession {
 
     // The main event loop of the program.
     public static void main(String[] args) {
-        // Setup the ultrasonicSensor (todo: there might be a better way to do this)
+
+        PIDController pidController = new PIDController(19, 0.5);
+
+
         SampleProvider sp = ultrasonicSensor.getDistanceMode();
         Delay.msDelay(1000); // Needed to wait for the sensor to initialise.
         float[] sample = new float[sp.sampleSize()];
 
-        startMoveForward();
+        motor1.backward();
+        motor2.backward();
 
-        // todo: make this nicer later on
         while(true){
-            Delay.msDelay(10);
 
+            Delay.msDelay(100);
             sp.fetchSample(sample, 0);
             int distanceValue = (int) sample[0];
             System.out.println("Distance: " + distanceValue);
 
-            if(5 <= distanceValue && distanceValue <= 25){
-                // pivotRightBy(90, 600); // todo: this is a pita
-                stop();
-                // moveBackwards(2000);
-                break;
-            }
+            pidController.updateVals(distanceValue);
+            int speed = pidController.recalibrate()*100;
+            System.out.println("speed: " + speed);
+            motor1.setSpeed(speed); sync();
+            motor2.setSpeed(speed); sync();
+
+            motor2.backward(); sync();
+            motor1.backward(); sync();
+
         }
+
+
+        // Setup the ultrasonicSensor (todo: there might be a better way to do this)
+//        SampleProvider sp = ultrasonicSensor.getDistanceMode();
+//        Delay.msDelay(1000); // Needed to wait for the sensor to initialise.
+//        float[] sample = new float[sp.sampleSize()];
+//
+//        startMoveForward();
+//
+//        // todo: make this nicer later on
+//        while(true){
+//            Delay.msDelay(10);
+//
+//            sp.fetchSample(sample, 0);
+//            int distanceValue = (int) sample[0];
+//            System.out.println("Distance: " + distanceValue);
+//
+//            if(5 <= distanceValue && distanceValue <= 25){
+//                // pivotRightBy(90, 600); // todo: this is a pita
+//                stop();
+//                // moveBackwards(2000);
+//                break;
+//            }
+//        }
+
+
 
         // Test code, might be hady for later:
 //        motor1.setSpeed(300);
