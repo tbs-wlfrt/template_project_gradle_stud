@@ -7,148 +7,139 @@ import lejos.hardware.port.SensorPort;
 import lejos.robotics.SampleProvider;
 import lejos.utility.Delay;
 
-//import jason.asSyntax.Literal;
-
 public class FirstSession {
 
-    //static final EV3ColorSensor sensor = new EV3ColorSensor(SensorPort.S1); //drop sensor
-    //static boolean call_mode = false;                                        //drop sensor
-    //static EV3ColorSensor color = new EV3ColorSensor(SensorPort.S4);     //sort Agent Color Sensor
-    //static boolean call_mode2 = false;
-
-    // todo: these should stay like they are
-    static EV3MediumRegulatedMotor motor1 = new EV3MediumRegulatedMotor(MotorPort.B); // Conveyor 2  Motor
-    static EV3MediumRegulatedMotor motor2 = new EV3MediumRegulatedMotor(MotorPort.C); // Conveyor 2  Motor
+    // TODO: Find out which of these is left and which of these is right and add the code here.
+    // The declaration of the motors.
+    static EV3MediumRegulatedMotor motor1 = new EV3MediumRegulatedMotor(MotorPort.B);
+    static EV3MediumRegulatedMotor motor2 = new EV3MediumRegulatedMotor(MotorPort.C);
+    // The declaration of the ultrasonic sensor.
     static EV3UltrasonicSensor ultrasonicSensor = new EV3UltrasonicSensor(SensorPort.S1);
 
-    static int sleepInterval = 5;
+    // Interval used to sleep between consecutive commands.
+    static int sleepIntervalInMilliSeconds = 5;
 
-    //static EV3LargeRegulatedMotor motor = new EV3LargeRegulatedMotor(MotorPort.D); // Conveyor 2  Moto
-    //static EV3TouchSensor touchSensor = new EV3TouchSensor(SensorPort.S2); // DropButton
-    // static EV3MediumRegulatedMotor dropmotor = new EV3MediumRegulatedMotor(MotorPort.A); // DropMotor
-    // static EV3LargeRegulatedMotor shredermotor = new EV3LargeRegulatedMotor(MotorPort.C); // ShredMotor
-    //static EV3UltrasonicSensor ultrasonicSensor = new EV3UltrasonicSensor(SensorPort.S3);
+    /**
+     * This is needed to sync the java code with the slower mindstorms robot.
+     * This needs to be called after each operation.
+     */
+    public static void sync(){
+        Delay.msDelay(sleepIntervalInMilliSeconds);
+    }
 
-//    public static boolean check_button() {
-//        boolean touch = touchSensor.isPressed();
-//        return touch;
-//        //if (distanceValue<100) {
-//    }
-//
-//    public static int ultra_sensor_based_motor() {
-//        Delay.msDelay(magicNumber);
-//        SampleProvider sp = ultrasonicSensor.getDistanceMode();
-//        int distanceValue = 0;
-//        float[] sample = new float[sp.sampleSize()];
-//        sp.fetchSample(sample, 0);
-//        distanceValue = (int) sample[0];
-//        System.out.println("distance: " + distanceValue);
-//        return distanceValue;
-//    }
-
+    /**
+     * Turn the robot clockwise around the center-point of rotation for *time* duration.
+     * @param time The duration in ms to turn for.
+     */
     public static void turnRightInPlace(int time){
-        motor1.backward();
-        Delay.msDelay(sleepInterval);
-        motor2.forward();
-        Delay.msDelay(sleepInterval);
+        motor1.backward(); sync();
+        motor2.forward(); sync();
 
-        Delay.msDelay(time);
-        Delay.msDelay(sleepInterval);
+        Delay.msDelay(time); sync();
 
-        motor1.stop();
-        Delay.msDelay(sleepInterval);
-        motor2.stop();
-        Delay.msDelay(sleepInterval);
+        motor1.stop(); sync();
+        motor2.stop(); sync();
     }
 
+    /**
+     * Turn the robot counter-clockwise around the center-point of rotation for *time* duration.
+     * @param time The duration in ms to turn for.
+     */
     public static void turnLeftInPlace(int time){
-        motor1.forward();
-        Delay.msDelay(sleepInterval);
-        motor2.backward();
-        Delay.msDelay(sleepInterval);
+        motor1.forward(); sync();
+        motor2.backward(); sync();
 
-        Delay.msDelay(time);
-        Delay.msDelay(sleepInterval);
+        Delay.msDelay(time); sync();
 
-        motor1.stop();
-        Delay.msDelay(sleepInterval);
-        motor2.stop();
-        Delay.msDelay(sleepInterval);
+        motor1.stop(); sync();
+        motor2.stop(); sync();
     }
 
+    /**
+     * Start to move the robot forward indefinitely.
+     */
     public static void startMoveForward(){
-        motor1.backward();
-        Delay.msDelay(sleepInterval);
-        motor2.backward();
-        Delay.msDelay(sleepInterval);
+        motor1.backward(); sync();
+        motor2.backward(); sync();
     }
 
+    /**
+     * Stop the robot.
+     */
     public static void stop(){
-        motor1.stop();
-        Delay.msDelay(sleepInterval);
-        motor2.stop();
-        Delay.msDelay(sleepInterval);
+        motor1.stop(); sync();
+        motor2.stop(); sync();
     }
 
+    /**
+     * Move the robot backwards indefinitely.
+     */
     public static void startMoveBackwards(){
-        motor1.forward();
-        Delay.msDelay(sleepInterval);
-        motor2.forward();
-        Delay.msDelay(sleepInterval);
+        motor1.forward(); sync();
+        motor2.forward(); sync();
     }
 
+    /**
+     * Move the robot forward for *time* duration.
+     * @param time The duration in ms to move for.
+     */
     public static void moveForward(int time){
-        motor1.backward();
-        Delay.msDelay(sleepInterval);
-        motor2.backward();
-        Delay.msDelay(sleepInterval);
+        motor1.backward(); sync();
+        motor2.backward(); sync();
 
-        Delay.msDelay(time);
-        Delay.msDelay(sleepInterval);
+        Delay.msDelay(time); sync();
 
-        motor1.stop();
-        Delay.msDelay(sleepInterval);
-        motor2.stop();
-        Delay.msDelay(sleepInterval);
+        motor1.stop(); sync();
+        motor2.stop(); sync();
     }
 
+    /**
+     * Move the robot backwards for *time* duration.
+     * @param time The duration in ms to move for.
+     */
     public static void moveBackwards(int time){
-        motor1.forward();
-        Delay.msDelay(sleepInterval);
-        motor2.forward();
-        Delay.msDelay(sleepInterval);
+        motor1.forward(); sync();
+        motor2.forward(); sync();
 
-        Delay.msDelay(time);
-        Delay.msDelay(sleepInterval);
+        Delay.msDelay(time); sync();
 
-        motor1.stop();
-        Delay.msDelay(sleepInterval);
-        motor2.stop();
-        Delay.msDelay(sleepInterval);
+        motor1.stop(); sync();
+        motor2.stop(); sync();
     }
 
+    /**
+     * Pivot the robot clockwise around the right wheel *degrees* with *speed*.
+     * @param degrees The degrees to pivot for, with 360 being a full pivot.
+     * @param speed The speed of the motor when pivoting.
+     */
     public static void pivotRightBy(int degrees, int speed){
         int curSpeed = motor2.getSpeed();
-        motor2.setSpeed(speed);
-        Delay.msDelay(sleepInterval);
         double angle = 1265.0/360.0*degrees;
-        motor2.rotate((int) angle);
-        Delay.msDelay(sleepInterval);
-        motor2.setSpeed(curSpeed);
-        Delay.msDelay(sleepInterval);
+
+        motor2.setSpeed(speed); sync();
+        motor2.rotate((int) angle); sync();
+        motor2.setSpeed(curSpeed); sync();
     }
 
-    public static void pivotLeftBy(int degrees){
+    /**
+     * Pivot the robot counter-clockwise around the right wheel *degrees* with *speed*.
+     * @param degrees The degrees to pivot for, with 360 being a full pivot.
+     * @param speed The speed of the motor when pivoting.
+     */
+    public static void pivotLeftBy(int degrees, int speed){
+        int curSpeed = motor1.getSpeed();
         double angle = 1265.0/360.0*degrees;
-        motor1.rotate((int) angle);
-        Delay.msDelay(sleepInterval);
+
+        motor1.setSpeed(speed); sync();
+        motor1.rotate((int) angle); sync();
+        motor1.setSpeed(curSpeed); sync();
     }
 
+    // The main event loop of the program.
     public static void main(String[] args) {
-        // todo: begin our code
-        // setup
+        // Setup the ultrasonicSensor (todo: there might be a better way to do this)
         SampleProvider sp = ultrasonicSensor.getDistanceMode();
-        Delay.msDelay(1000); // init of the sensor
+        Delay.msDelay(1000); // Needed to wait for the sensor to initialise.
         float[] sample = new float[sp.sampleSize()];
 
         startMoveForward();
@@ -169,6 +160,7 @@ public class FirstSession {
             }
         }
 
+        // Test code, might be hady for later:
 //        motor1.setSpeed(300);
 //        motor2.setSpeed(300);
 //        Delay.msDelay(sleepInterval);
@@ -187,6 +179,5 @@ public class FirstSession {
 //         // turnRightInPlace(5000);
 
         return;
-        // todo: end our code
     }
 }
