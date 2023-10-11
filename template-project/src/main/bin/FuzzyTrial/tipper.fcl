@@ -1,0 +1,115 @@
+/*
+	Example: A tip calculation FIS (fuzzy inference system)
+	Calculates tip based on 'servie' and 'food'
+
+	If you want to about this example (and fuzzy logic), please 
+	read Matlab's tutorial on fuzzy logic toolbox 
+	http://www.mathworks.com/access/helpdesk/help/pdf_doc/fuzzy/fuzzy.pdf
+
+									Pablo Cingolani 
+									pcingola@users.sourceforge.net
+*/
+
+FUNCTION_BLOCK tipper	// Block definition (there may be more than one block per file)
+
+
+
+VAR_INPUT
+    distance: REAL;
+
+    obstacle_left: REAL;
+    obstacle_right: REAL;
+    obstacle_front: REAL;
+END_VAR
+
+VAR_OUTPUT
+    speed: REAL;
+    rotation: REAL;
+END_VAR
+
+
+FUZZIFY distance			// Fuzzify input variable 'service': {'begin', 'middle' , 'end'}
+      TERM begin := gauss 200 100;
+      TERM middle := gauss 550 150;
+      TERM end := gauss 900 300;
+END_FUZZIFY
+
+FUZZIFY obstacle_left			// Fuzzify input variable 'service': {'close', 'near' }
+    TERM close :=trian   0 0 25;
+    TERM near  := trian  0 25 200;
+
+END_FUZZIFY
+
+FUZZIFY obstacle_right			// Fuzzify input variable 'service': {'close', 'near' }
+    TERM close :=trian   0 0 25;
+    TERM near  := trian  0 25 200;
+
+END_FUZZIFY
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+FUZZIFY obstacle_front			// Fuzzify input variable 'service': {'close', 'near' , 'far'}
+      TERM close := trape 0 25 50 75;
+      TERM near  := trape 50 55 95 100;
+      TERM far   := trape 90 100 150 150;
+END_FUZZIFY
+
+
+DEFUZZIFY speed			// Defzzzify output variable 'tip' : {'stop','low','high'}
+	TERM stop := trape -152 0 130 150 ;
+	TERM low := gauss 500 120;
+	TERM high := gauss 800 60;
+	METHOD : COG;		// Use 'Center Of Gravity' defuzzification method
+	DEFAULT := 0.212;		// Default value is 0 (if no rule activates defuzzifier)
+END_DEFUZZIFY
+
+
+DEFUZZIFY rotation			// Defzzzify output variable 'tip' : {'rotRight','rotLeft'}
+	TERM rotLeft:=   trian 315 315 360 ;
+	TERM rotRight := trian 0 45 45 ;
+	METHOD : COG;		// Use 'Center Of Gravity' defuzzification method
+	DEFAULT := 0;		// Default value is 0 (if no rule activates defuzzifier)
+END_DEFUZZIFY
+
+
+
+
+RULEBLOCK No1
+	AND : MIN;			// Use 'min' for 'and' (also implicit use 'max' for 'or' to fulfill DeMorgan's Law)
+	ACT : MIN;			// Use 'min' activation method
+	ACCU : MAX;			// Use 'max' accumulation method
+
+    RULE 1 : IF distance IS begin AND obstacle_front IS close THEN speed IS stop;
+	RULE 2 : IF distance IS begin AND obstacle_front IS near THEN speed IS low;
+	RULE 3 : IF distance IS begin AND obstacle_front IS far THEN speed IS high;
+
+    RULE 4 : IF distance IS middle AND obstacle_front IS close THEN speed IS stop;
+    RULE 5 : IF distance IS middle AND obstacle_front IS near THEN speed IS low;
+    RULE 6 : IF distance IS middle AND obstacle_front IS far THEN speed IS high;
+
+    RULE 7 : IF distance IS end AND obstacle_front IS close THEN speed IS stop;
+    RULE 8 : IF distance IS end AND obstacle_front IS near THEN speed IS low;
+    RULE 9 : IF distance IS end AND obstacle_front IS far THEN speed IS low;
+
+    RULE 10: IF obstacle_right IS close AND obstacle_left IS near THEN rotation IS rotLeft;
+    RULE 11: IF obstacle_right IS near AND obstacle_left IS close THEN rotation IS rotRight;
+
+
+
+
+
+END_RULEBLOCK
+
+END_FUNCTION_BLOCK
+
