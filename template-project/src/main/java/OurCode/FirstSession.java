@@ -139,7 +139,8 @@ public class FirstSession {
     // The main event loop of the program.
     public static void main(String[] args) {
 
-        PIDController pidController = new PIDController(19, 0.5);
+        int speedMultiplier = 40;
+        PIDController pidController = new PIDController(50, 0.5);
 
 
         SampleProvider sp = ultrasonicSensor.getDistanceMode();
@@ -157,7 +158,7 @@ public class FirstSession {
             System.out.println("Distance: " + distanceValue);
 
             pidController.updateVals(distanceValue);
-            int speed = pidController.recalibrate()*100;
+            int speed = (int) Math.min(pidController.recalibrate()*speedMultiplier, 1000);
             System.out.println("speed: " + speed);
             motor1.setSpeed(speed); sync();
             motor2.setSpeed(speed); sync();
