@@ -1,22 +1,32 @@
-package OurCode;
+package OGAgent;
+
 
 import ev3dev.actuators.lego.motors.EV3MediumRegulatedMotor;
 import ev3dev.sensors.ev3.EV3UltrasonicSensor;
 import lejos.hardware.port.MotorPort;
 import lejos.hardware.port.SensorPort;
-import lejos.robotics.SampleProvider;
 import lejos.utility.Delay;
 
-public class FirstSession {
+public class Device {
+    //Motors instantiation
+    static EV3MediumRegulatedMotor motor1 = null;
+    static EV3MediumRegulatedMotor motor2 = null;
 
-    // TODO: Find out which of these is left and which of these is right and add the code here.
-    static EV3MediumRegulatedMotor motor1 = new EV3MediumRegulatedMotor(MotorPort.B); // left
-    static EV3MediumRegulatedMotor motor2 = new EV3MediumRegulatedMotor(MotorPort.C); // right
     // The declaration of the ultrasonic sensor.
-    static EV3UltrasonicSensor ultrasonicSensor = new EV3UltrasonicSensor(SensorPort.S1);
-
-    // Interval used to sleep between consecutive commands.
+    static EV3UltrasonicSensor ultrasonicSensor = null;
     static int sleepIntervalInMilliSeconds = 5;
+
+
+    public static void init() {
+        System.out.println("Initialising...");
+        //assigning motors
+        motor1 = new EV3MediumRegulatedMotor(MotorPort.B); // left
+        motor2 = new EV3MediumRegulatedMotor(MotorPort.C); // right
+
+        ultrasonicSensor = new EV3UltrasonicSensor(SensorPort.S1);
+
+        System.out.println("Finished initialisation.");
+    }
 
 
     // TODO: Move these out into another file maybe?
@@ -136,82 +146,4 @@ public class FirstSession {
         motor1.setSpeed(curSpeed); sync();
     }
 
-    // The main event loop of the program.
-    public static void main(String[] args) {
-
-        int speedMultiplier = 40;
-        PIDController pidController = new PIDController(50, 0.5);
-
-
-        SampleProvider sp = ultrasonicSensor.getDistanceMode();
-        Delay.msDelay(1000); // Needed to wait for the sensor to initialise.
-        float[] sample = new float[sp.sampleSize()];
-
-        motor1.backward();
-        motor2.backward();
-
-        while(true){
-
-            Delay.msDelay(100);
-            sp.fetchSample(sample, 0);
-            int distanceValue = (int) sample[0];
-            System.out.println("Distance: " + distanceValue);
-
-            pidController.updateVals(distanceValue);
-            int speed = (int) Math.min(pidController.recalibrate()*speedMultiplier, 1000);
-            System.out.println("speed: " + speed);
-            motor1.setSpeed(speed); sync();
-            motor2.setSpeed(speed); sync();
-
-            motor2.backward(); sync();
-            motor1.backward(); sync();
-
-        }
-
-
-        // Setup the ultrasonicSensor (todo: there might be a better way to do this)
-//        SampleProvider sp = ultrasonicSensor.getDistanceMode();
-//        Delay.msDelay(1000); // Needed to wait for the sensor to initialise.
-//        float[] sample = new float[sp.sampleSize()];
-//
-//        startMoveForward();
-//
-//        // todo: make this nicer later on
-//        while(true){
-//            Delay.msDelay(10);
-//
-//            sp.fetchSample(sample, 0);
-//            int distanceValue = (int) sample[0];
-//            System.out.println("Distance: " + distanceValue);
-//
-//            if(5 <= distanceValue && distanceValue <= 25){
-//                // pivotRightBy(90, 600); // todo: this is a pita
-//                stop();
-//                // moveBackwards(2000);
-//                break;
-//            }
-//        }
-
-
-
-        // Test code, might be hady for later:
-//        motor1.setSpeed(300);
-//        motor2.setSpeed(300);
-//        Delay.msDelay(sleepInterval);
-//        // moveForward(5000);
-//        // motor2.rotate(360); // 90isch
-//        pivotRightBy(360);
-//        pivotLeftBy(360);
-//        // motor2.rotate(1265/4); // 90isch
-//        // Delay.msDelay(magicNumber);
-//        //motor2.rotate(-1260);
-//         // instructions
-//         // moveForward(5000);
-//         // moveBackwards(5000);
-//         // turnLeftInPlace(1100); // 180
-//        // turnLeftInPlace(550); // 180
-//         // turnRightInPlace(5000);
-
-      //  return;
-    }
 }

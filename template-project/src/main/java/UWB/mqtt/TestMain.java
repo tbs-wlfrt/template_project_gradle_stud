@@ -7,6 +7,7 @@ public class TestMain {
     public static void main(String[] args) throws MqttException, InterruptedException {
         // FILL IN HEXID OF TAG (without 0x)
         TagMqtt tag = new TagMqtt("6841");
+        System.out.println("hi there");
         Point2D last_loc = new Point2D(0,0);
         Point2D dest = new Point2D(-151, 4242);
         while (true) {

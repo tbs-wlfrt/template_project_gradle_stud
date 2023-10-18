@@ -1,10 +1,11 @@
-package CutePuppies;
+package OGAgent;
 
 import UWB.mqtt.TagMqtt;
 import jade.core.AID;
 import jade.core.Agent;
 import jade.core.behaviours.*;
 import jade.lang.acl.ACLMessage;
+import lejos.utility.Delay;
 import org.eclipse.paho.client.mqttv3.MqttException;
 
 import java.awt.geom.Point2D;
@@ -13,57 +14,52 @@ import java.util.Random;
 
 import static jade.lang.acl.ACLMessage.INFORM;
 
-public class BadGirl extends Agent {
-    int[] path = new int[]{};
-    int path_iterator = 0;
-    int delay = 5000;
-    boolean obstacle = false;
-    int thres_dist = 25;
-    boolean in_transit = false;
-    String mission_type = "";
-    String message = "ack";
+public class RobotAgent extends Agent {
+    int[] path = new int[]{}; // a list containing the path the agent has to take
+    int pathIterator = 0; // the current route within the path the agent is taking
+    int delay = 5000; // the delay between each step the agent takes
+    boolean obstacleExists = false; // whether the agent is an obstacle or not
+    int obstacleDistanceThreshold = 25; // the maximum acceptable distance required between the agent and the obstacle
+    boolean onMission = false;
 
-    static TagMqtt tag;   //682E  -> 6a75 // 6841 6841
+
+    String mission_type = ""; // the mission the agent has to complete
+
+    static TagMqtt robotTag;
 
     static {
         try {
-            tag = new TagMqtt("6841");
-        } catch (MqttException e) {
+            robotTag = new TagMqtt("6841");
+        }
+        catch (MqttException e) {
             e.printStackTrace();
         }
     }
 
+    static int ultrasonic_front = 0;
+    static int ultrasonic_left = 0;
+    static int ultrasonic_right = 0;
 
-    static int ultra_front = 0;
-    static int ultra_left = 0;
-    static int ultra_right = 0;
-
-
-    CyclicBehaviour obstacle_detection = new CyclicBehaviour() {
-        @Override
-        public void action() {
-            try {
-                int freeDistance = Device.lookAhead_front();
-                obstacle = freeDistance < thres_dist;
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+    // cyclicly check if there's an obstacle in front of the agent
+    CyclicBehaviour obstacle_detection = () -> {
+        try{
+            int freeDistance = Device.lookAhead_front();
+            obstacleExists = freeDistance < obstacleDistanceThreshold;
+        }
+        catch(Exception e){
+            e.printStackTrace();
         }
     };
 
-    CyclicBehaviour obstacle_check = new CyclicBehaviour() {
-        @Override
-        public void action() {
-            try {
-                ultra_front = Device.lookAhead_front();
-                ultra_left = Device.lookAhead_left();
-                ultra_right = Device.lookAhead_right();
-
-                //   System.out.println(" LEFT "+ultra_left+" "+" RIGHT "+ultra_right);
-
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+    // cyclicly check for obstacles
+    CyclicBehaviour obstacle_check = () -> {
+        try{
+            ultrasonic_front = Device.lookAhead_front();
+            ultrasonic_left = Device.lookAhead_left();
+            ultrasonic_right = Device.lookAhead_right();
+        }
+        catch(Exception e){
+            e.printStackTrace();
         }
     };
 
@@ -113,7 +109,7 @@ public class BadGirl extends Agent {
         @Override
         public void action() {
             try {
-                Device.forward();
+                CutePuppies.Device.forward();
                 System.out.println("Forward");
             } catch (Exception e) {
                 e.printStackTrace();
@@ -125,7 +121,7 @@ public class BadGirl extends Agent {
         @Override
         public void action() {
             try {
-                Device.backward();
+                CutePuppies.Device.backward();
                 System.out.println("Backward");
             } catch (Exception e) {
                 e.printStackTrace();
@@ -137,7 +133,7 @@ public class BadGirl extends Agent {
         @Override
         public void action() {
             try {
-                Device.turnLeft();
+                CutePuppies.Device.turnLeft();
                 System.out.println("Right");
             } catch (Exception e) {
                 e.printStackTrace();
@@ -149,7 +145,7 @@ public class BadGirl extends Agent {
         @Override
         public void action() {
             try {
-                Device.turnRight();
+                CutePuppies.Device.turnRight();
                 System.out.println("Left");
             } catch (Exception e) {
                 e.printStackTrace();
@@ -161,13 +157,14 @@ public class BadGirl extends Agent {
         @Override
         public void action() {
             try {
-                Device.stop();
+                CutePuppies.Device.stop();
 //                System.out.println("Stop");
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
     };
+
 
     OneShotBehaviour init_message = new OneShotBehaviour() {
         @Override
@@ -196,7 +193,6 @@ public class BadGirl extends Agent {
             }
         }
     };
-
 
     TickerBehaviour tck = new TickerBehaviour(this, 1000) {
         @Override
@@ -235,7 +231,7 @@ public class BadGirl extends Agent {
 
                     mission_type = parsed_msg[0];
                     path = Arrays.asList(parsed_msg[1].split(",")).stream().map(String::trim).mapToInt(Integer::parseInt).toArray(); //new int[]{4800, 4800};
-                    path_iterator = 0;
+                    pathIterator = 0;
 
                     System.out.println(Arrays.toString(path));
 
@@ -259,24 +255,21 @@ public class BadGirl extends Agent {
         }
     };
 
-
-    //Behaviour move = new Behaviour() {
-
     Behaviour move = new Behaviour() {
         @Override
         public void action() {
             try {
-                int x = tag.getSmoothenedLocation(10).x;
-                int y = tag.getSmoothenedLocation(10).y;
+                int x = robotTag.getSmoothenedLocation(10).x;
+                int y = robotTag.getSmoothenedLocation(10).y;
 
                 if (x != 0 && y != 0) {
-                    int target_x = path[path_iterator];
-                    int target_y = path[path_iterator + 1];
+                    int target_x = path[pathIterator];
+                    int target_y = path[pathIterator + 1];
 
                     System.out.println("x: " + x);
                     System.out.println("y: " + y);
 
-                    float yaw = (float) Math.toDegrees(tag.yaw);
+                    float yaw = (float) Math.toDegrees(robotTag.yaw);
                     // yaw = (float) (yaw-301.5);
                     System.out.println("yaw mission=" + yaw);
 
@@ -314,13 +307,13 @@ public class BadGirl extends Agent {
 
 
                     if (Math.abs(target_x - x) < 100 && Math.abs(target_y - y) < 100) {    // old params diff_angle > 10 && diff_angle <= 180, diff_angle < 350 && diff_angle > 180
-                        path_iterator += 2;
+                        pathIterator += 2;
                     } else if (diff_angle > 10 && diff_angle <= 180) {
-                        Device.setSpeed(200);
+                        CutePuppies.Device.setSpeed(200);
                         addBehaviour(turn_right);
                         System.out.println("RIGHT");
                     } else if (diff_angle < 350 && diff_angle > 180) {
-                        Device.setSpeed(200);
+                        CutePuppies.Device.setSpeed(200);
                         addBehaviour(turn_left);
                         System.out.println("LEFT");
                     }
@@ -328,7 +321,7 @@ public class BadGirl extends Agent {
 //                        addBehaviour(stop);
 //                    }
                     else {
-                        Device.fuzzy_speed_distance(dist, yaw); // fuzzy_speed
+                        CutePuppies.Device.fuzzy_speed_distance(dist, yaw); // fuzzy_speed
                         addBehaviour(go_forward);
                         System.out.println("FORWARD");
                     }
@@ -344,7 +337,7 @@ public class BadGirl extends Agent {
 
         @Override
         public boolean done() {
-            return path_iterator >= path.length;
+            return pathIterator >= path.length;
         }
     };
 
@@ -367,7 +360,7 @@ public class BadGirl extends Agent {
         @Override
         public void action() {
             if (mission_type.equals("pickup")) {
-                in_transit = true;
+                onMission = true;
             }
 
             addBehaviour(sendRot);
@@ -381,11 +374,44 @@ public class BadGirl extends Agent {
 
     SequentialBehaviour mission = new SequentialBehaviour();
 
-    public BadGirl() throws MqttException {
+
+    OneShotBehaviour followPath = new OneShotBehaviour() {
+        @Override
+        public void action() {
+            try {
+                System.out.println("Following hardcoded square path...");
+                Device.startMoveForward();
+                Delay.msDelay(2000);
+                Device.stop();
+                Device.pivotLeftBy(90, 500);
+                Device.startMoveForward();
+                Delay.msDelay(2000);
+                Device.stop();
+                Device.pivotLeftBy(90, 500);
+                Device.startMoveForward();
+                Delay.msDelay(2000);
+                Device.stop();
+                Device.pivotLeftBy(90, 500);
+                Device.startMoveForward();
+                Delay.msDelay(2000);
+                Device.stop();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    };
+
+
+
+
+    public RobotAgent() throws MqttException {
     }
 
     protected void setup() {
 
+        //BEHAVIOURS (for our scenarios):
+        //PID for following (cyclic behaviour for checking distance and updating speed)
+        //follow predefined path (one shot behaviour for just following a hardcoded set of instructions)
 
         addBehaviour(obstacle_check);
         addBehaviour(init_message);
@@ -395,4 +421,7 @@ public class BadGirl extends Agent {
         //  addBehaviour(tck);
         //    addBehaviour(turn_left);
     }
+
+
+
 }
