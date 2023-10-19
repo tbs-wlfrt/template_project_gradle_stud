@@ -136,8 +136,29 @@ public class FirstSession {
         motor1.setSpeed(curSpeed); sync();
     }
 
+
+    public static void pivotLeftBy2(int degrees, int speed){
+        int curSpeed = motor1.getSpeed();
+
+        motor1.setSpeed(speed); sync();
+        motor1.rotate(degrees); sync();
+        motor1.setSpeed(curSpeed); sync();
+    }
+
+    public static void pivotRightBy2(int degrees, int speed){
+        int curSpeed = motor2.getSpeed();
+
+        motor2.setSpeed(speed); sync();
+        motor2.rotate(degrees); sync();
+        motor2.setSpeed(curSpeed); sync();
+    }
+
     // The main event loop of the program.
     public static void main(String[] args) {
+
+        float trackSize = 13f;
+        float wheelSize = 5.6f;
+        int ninetyDegrees = (int)Math.floor(Turner.calculatePivot(90, wheelSize, trackSize));
 
         int speedMultiplier = 40;
         PIDController pidController = new PIDController(50, 0.5);
@@ -150,6 +171,12 @@ public class FirstSession {
         motor1.backward();
         motor2.backward();
 
+        int motorSpeed = 500;
+        //startMoveForward();
+
+
+        Delay.msDelay(500);
+
         while(true){
 
             Delay.msDelay(100);
@@ -157,15 +184,45 @@ public class FirstSession {
             int distanceValue = (int) sample[0];
             System.out.println("Distance: " + distanceValue);
 
-            pidController.updateVals(distanceValue);
-            int speed = (int) Math.min(pidController.recalibrate()*speedMultiplier, 1000);
-            System.out.println("speed: " + speed);
-            motor1.setSpeed(speed); sync();
-            motor2.setSpeed(speed); sync();
+            /*
+            //avoid obstacle (basic) stuff
+            if (distanceValue < 20){
+                stop();
+                turnLeftInPlace(500);
+                moveForward(2000);
+                turnRightInPlace(500);
+                moveForward(2000);
+                turnRightInPlace(500);
+                moveForward(2000);
+                turnLeftInPlace(500);
+                startMoveForward();
+            }
+            */
 
-            motor2.backward(); sync();
-            motor1.backward(); sync();
+            //PID stuff
+            //pidController.updateVals(distanceValue);
+            //int speed = (int) Math.min(pidController.recalibrate()*speedMultiplier, 1000);
+            //System.out.println("speed: " + speed);
+            //motor1.setSpeed(speed); sync();
+            //motor2.setSpeed(speed); sync();
 
+
+            //"follow path" stuff
+            moveForward(2000);
+            turnLeftInPlace(500);
+            moveForward(1000);
+            turnLeftInPlace(500);
+            moveForward(1000);
+            turnLeftInPlace(500);
+            moveForward(2000);
+            turnRightInPlace(500);
+            moveForward(1000);
+            turnRightInPlace(500);
+            moveForward(1000);
+            turnRightInPlace(500);
+            moveBackwards(3000);
+
+            break;
         }
 
 
