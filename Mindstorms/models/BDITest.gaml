@@ -43,6 +43,7 @@ global{
 	predicate has_crate <- new_predicate("has crate");
 	predicate dropped_off_crate <- new_predicate("dropped off crate");
 	predicate select_crate <- new_predicate("select crate");
+	predicate rotate_towards <- new_predicate("rotating towards");
 	
 	int instance_count <- 1;
 	int rotation <- 120;
@@ -83,11 +84,26 @@ species robot skills: [moving] control: simple_bdi{
 	rule belief: crate_location new_desire: has_crate strength: 2.0;
 	rule belief: has_crate new_desire: dropped_off_crate strength: 3.0;
 	rule belief: dropped_off_crate new_desire: has_crate strength: 2.0;
+	rule belief: rotate_towards;
+	
+	plan rotate_toward intention: rotate_towards{
+		if (target != nil){
+			write "rotating towards: " + target;
+			write "starting from position: " + location;
+			point d <- target - location;
+			write "delta is: " + d;
+			float angle <- atan2(d.y, d.x) + 90.0;  // we add 90, since 0 deg rotation = facing UP (not RIGHT)
+			write "angle is: " + angle;
+			_rotation <- angle; 
+		}
+		do remove_intention(rotate_towards, true);
+	}
 
 	plan go_to_crate intention: has_crate {
 		//select crate if no target, go to target otherwise
 		if (target = nil) {
 			do add_subintention(get_current_intention(), select_crate, true);
+			do add_subintention(get_current_intention(), rotate_towards, true);
 			do current_intention_on_hold();
 		}
 		else {
@@ -109,6 +125,8 @@ species robot skills: [moving] control: simple_bdi{
 	plan deliver_crate intention: dropped_off_crate {
 		if (target = nil) {
 			target <- drop_off_point collect each.location at 0;
+			do add_subintention(get_current_intention(), rotate_towards, true);
+			do current_intention_on_hold();
 		}
 		else {
 			do goto target: target;
