@@ -84,26 +84,11 @@ species robot skills: [moving] control: simple_bdi{
 	rule belief: crate_location new_desire: has_crate strength: 2.0;
 	rule belief: has_crate new_desire: dropped_off_crate strength: 3.0;
 	rule belief: dropped_off_crate new_desire: has_crate strength: 2.0;
-	rule belief: rotate_towards;
-	
-	plan rotate_toward intention: rotate_towards{
-		if (target != nil){
-			write "rotating towards: " + target;
-			write "starting from position: " + location;
-			point d <- target - location;
-			write "delta is: " + d;
-			float angle <- atan2(d.y, d.x) + 90.0;  // we add 90, since 0 deg rotation = facing UP (not RIGHT)
-			write "angle is: " + angle;
-			_rotation <- angle; 
-		}
-		do remove_intention(rotate_towards, true);
-	}
 
 	plan go_to_crate intention: has_crate {
 		//select crate if no target, go to target otherwise
 		if (target = nil) {
 			do add_subintention(get_current_intention(), select_crate, true);
-			do add_subintention(get_current_intention(), rotate_towards, true);
 			do current_intention_on_hold();
 		}
 		else {
@@ -116,17 +101,29 @@ species robot skills: [moving] control: simple_bdi{
 		}
 	}
 	
+	action rotate{
+		if (target != nil){
+			point d <- target - location;
+			float angle <- atan2(d.y, d.x) + 90.0;  // we add 90, since 0 deg rotation = facing UP (not RIGHT)
+			_rotation <- angle; 
+		}
+	}
+	
 	plan choose_crate intention: select_crate instantaneous: true {
 		list<point> crate_locations <- crate collect each.location;
 		target <- crate_locations at crates_visited;
+		write "target was set to: " + target;
+		do rotate;
 		do remove_intention(select_crate, true);
 	}
+	
 	
 	plan deliver_crate intention: dropped_off_crate {
 		if (target = nil) {
 			target <- drop_off_point collect each.location at 0;
-			do add_subintention(get_current_intention(), rotate_towards, true);
-			do current_intention_on_hold();
+			do rotate;
+//			do add_subintention(get_current_intention(), rotate_towards, true);
+//			do current_intention_on_hold();
 		}
 		else {
 			do goto target: target;
