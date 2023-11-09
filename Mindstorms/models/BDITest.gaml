@@ -64,21 +64,20 @@ species robot skills: [moving] control: simple_bdi{
 	
 	float size <- 1.0;
 	rgb color <- #black;
-	int _rotation;
 	geometry rect;
 	
 	init {
 		location <- point(50,50);
-		_rotation <- rotation;
+		heading <- rotation;
 		do add_desire(has_crate);
 		
 	}
 
 	aspect base {
-		point r <- point(sin(_rotation), -cos(_rotation));
-		rect <- (rectangle(2,80) translated_by point(r*40)) rotated_by _rotation;
+		point r <- point(sin(heading+90), -cos(heading+90));
+		rect <- (rectangle(2,80) translated_by point(r*40)) rotated_by (heading+90);
 		draw rect  color:#yellow;
-		draw triangle(10) rotated_by _rotation color: color;
+		draw triangle(10) rotated_by (heading+90) color: color;
 	}
 	
 	rule belief: crate_location new_desire: has_crate strength: 2.0;
@@ -92,7 +91,7 @@ species robot skills: [moving] control: simple_bdi{
 			do current_intention_on_hold();
 		}
 		else {
-			do goto target: target;
+			do move speed: speed heading: heading;
 			if (target = location) {
 				do add_belief(has_crate);
 				target <- nil;
@@ -104,8 +103,8 @@ species robot skills: [moving] control: simple_bdi{
 	action rotate{
 		if (target != nil){
 			point d <- target - location;
-			float angle <- atan2(d.y, d.x) + 90.0;  // we add 90, since 0 deg rotation = facing UP (not RIGHT)
-			_rotation <- angle; 
+			float angle <- atan2(d.y, d.x);  // we add 90, since 0 deg rotation = facing UP (not RIGHT)
+			heading <- angle; 
 		}
 	}
 	
@@ -126,7 +125,7 @@ species robot skills: [moving] control: simple_bdi{
 //			do current_intention_on_hold();
 		}
 		else {
-			do goto target: target;
+			do move speed: speed heading: heading;
 			if (target = location) {
 				do remove_belief(has_crate);
 				crates_visited <- crates_visited + 1;
