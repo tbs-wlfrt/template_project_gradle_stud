@@ -92,14 +92,15 @@ species robot skills: [moving] control: simple_bdi{
 		}
 		else {
 			do move speed: speed heading: heading;
-			if (target = location) {
+			float dist <- check_distance(target, location);
+			if (dist < 5) {
 				do add_belief(has_crate);
 				target <- nil;
 				
 			}
 		}
 	}
-	
+		
 	action rotate{
 		if (target != nil){
 			point d <- target - location;
@@ -126,7 +127,8 @@ species robot skills: [moving] control: simple_bdi{
 		}
 		else {
 			do move speed: speed heading: heading;
-			if (target = location) {
+			float dist <- check_distance(target, location);
+			if (dist < 5) {
 				do remove_belief(has_crate);
 				crates_visited <- crates_visited + 1;
 				target <- nil;
@@ -134,10 +136,13 @@ species robot skills: [moving] control: simple_bdi{
 				
 			}
 		}
+	}	
+	
+	float check_distance(point p0, point p1){
+		float diff <- abs(p0.x - p1.x);
+		diff <- diff + abs(p0.y - p1.y);
+		return diff;
 	}
-	
-	
-
 
 }
 
