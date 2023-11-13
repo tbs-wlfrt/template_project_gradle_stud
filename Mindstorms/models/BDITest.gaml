@@ -48,11 +48,14 @@ global{
 	int instance_count <- 1;
 	int rotation <- 120;
 	geometry cratesgeom;
+	geometry obstaclesgeom;
 	init {
 		create robot number: instance_count;
 		create crate number: 10;
+		create obstacle number: 20;
 		create drop_off_point number: 1;
 		cratesgeom <- union(crate collect each.geo);
+		obstaclesgeom <- union(obstacle collect each.geo);
 	}
 }
 
@@ -65,25 +68,41 @@ species robot skills: [moving] control: simple_bdi{
 	float size <- 1.0;
 	rgb color <- #black;
 	geometry rect;
+	geometry avoidrect;
 	
 	init {
 		location <- point(50,50);
 		heading <- rotation;
 		do add_desire(has_crate);
-		
 	}
 
 	aspect base {
 		point r <- point(sin(heading+90), -cos(heading+90));
-		rect <- (rectangle(2,80) translated_by point(r*40)) rotated_by (heading+90);
+		int rectlen <- 80;
+		int avoidrectlen <- 20;
+		rect <- (rectangle(2,rectlen) translated_by point(r*rectlen/2)) rotated_by (heading+90);
 		draw rect  color:#yellow;
+		avoidrect <- (rectangle(2,avoidrectlen) translated_by point(r*avoidrectlen/2)) rotated_by (heading+90);
+		draw avoidrect  color:#orange;
 		draw triangle(10) rotated_by (heading+90) color: color;
 	}
 	
+
 	rule belief: crate_location new_desire: has_crate strength: 2.0;
 	rule belief: has_crate new_desire: dropped_off_crate strength: 3.0;
 	rule belief: dropped_off_crate new_desire: has_crate strength: 2.0;
-
+	
+	action avoid{
+		if(obstaclesgeom = nil){
+			return; // TODO why is this not nil for collect_crates experiment?
+		}
+		// TODO maybe make this a plan as well; haven't found async plan execution though :/
+		write "avoiding obstacle";
+		if(avoidrect overlaps obstaclesgeom){
+			write "> Obstacle detected!";
+		}
+	}
+	
 	plan go_to_crate intention: has_crate {
 		//select crate if no target, go to target otherwise
 		if (target = nil) {
@@ -92,6 +111,7 @@ species robot skills: [moving] control: simple_bdi{
 		}
 		else {
 			do move speed: speed heading: heading;
+			do avoid;
 			float dist <- check_distance(target, location);
 			if (dist < 5) {
 				do add_belief(has_crate);
@@ -104,7 +124,7 @@ species robot skills: [moving] control: simple_bdi{
 	action rotate{
 		if (target != nil){
 			point d <- target - location;
-			float angle <- atan2(d.y, d.x);  // we add 90, since 0 deg rotation = facing UP (not RIGHT)
+			float angle <- atan2(d.y, d.x);
 			heading <- angle; 
 		}
 	}
@@ -127,6 +147,7 @@ species robot skills: [moving] control: simple_bdi{
 		}
 		else {
 			do move speed: speed heading: heading;
+			do avoid;
 			float dist <- check_distance(target, location);
 			if (dist < 5) {
 				do remove_belief(has_crate);
@@ -163,6 +184,17 @@ species crate {
 	}
 }
 
+species obstacle {
+	float width <- 2.0;
+	float height <- 7.0;
+	rgb color <- rgb (255,0,0);
+	geometry geo <- rectangle(width , height) rotated_by rnd(0, 360);
+		
+	aspect base {
+		draw geo color: color;
+	}
+}
+
 species drop_off_point {
 	float size <- 10.0;
 	rgb color <- #green;
@@ -192,3 +224,14 @@ experiment collect_crates type: gui {
 	}
 }
 
+experiment avoid_obstacle type: gui{
+		parameter "rotation" var: rotation min:0 max:359 ;
+		output {
+			display main_display type: 2d background: #grey{
+			species robot aspect: base;
+			species crate aspect: base;
+			species obstacle aspect: base;
+			species drop_off_point aspect: base;
+		}
+	}
+}
