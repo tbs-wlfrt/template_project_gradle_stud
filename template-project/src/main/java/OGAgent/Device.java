@@ -2,6 +2,7 @@ package OGAgent;
 
 
 import ev3dev.actuators.lego.motors.EV3MediumRegulatedMotor;
+import ev3dev.sensors.ev3.EV3ColorSensor;
 import ev3dev.sensors.ev3.EV3UltrasonicSensor;
 import lejos.hardware.port.MotorPort;
 import lejos.hardware.port.SensorPort;
@@ -14,6 +15,8 @@ public class Device {
 
     // The declaration of the ultrasonic sensor.
     static EV3UltrasonicSensor ultrasonicSensor = null;
+    static EV3ColorSensor colorSensor = null;
+
     static int sleepIntervalInMilliSeconds = 5;
 
 
@@ -24,6 +27,7 @@ public class Device {
         motor2 = new EV3MediumRegulatedMotor(MotorPort.C); // right
 
         ultrasonicSensor = new EV3UltrasonicSensor(SensorPort.S1);
+        colorSensor = new EV3ColorSensor(SensorPort.S2);
 
         System.out.println("Finished initialisation.");
     }
@@ -145,5 +149,26 @@ public class Device {
         motor1.rotate((int) angle); sync();
         motor1.setSpeed(curSpeed); sync();
     }
+
+    /**
+     * Sample the light sensor and return intensity reading.
+     * @return current light intensity reading from the sensor.
+     */
+    public static float sampleLightIntensity(){
+        //TODO: return light intensity value from colour sensor
+        return 0;
+    }
+
+    /**
+     * Sample the light sensor and return intensity reading.
+     * @param speed1 speed for motor 1.
+     * @param speed2 speed for motor 2.
+     */
+    public static void setMotorSpeeds(int speed1, int speed2){
+        motor1.setSpeed(speed1); sync();
+        motor2.setSpeed(speed2); sync();
+
+    }
+
 
 }
