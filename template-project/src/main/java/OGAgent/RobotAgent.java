@@ -22,6 +22,7 @@ public class RobotAgent extends Agent {
     int obstacleDistanceThreshold = 25; // the maximum acceptable distance required between the agent and the obstacle
     boolean onMission = false;
 
+    PIDController controller = new PIDController(75);
 
     String mission_type = ""; // the mission the agent has to complete
 
@@ -45,13 +46,16 @@ public class RobotAgent extends Agent {
     //static int ultrasonic_right = 0;
 
     // cyclicly check if there's an obstacle in front of the agent
-    CyclicBehaviour obstacle_detection = () -> {
-        try{
-            int freeDistance = Device.lookAhead_front();
-            obstacleExists = freeDistance < obstacleDistanceThreshold;
-        }
-        catch(Exception e){
-            e.printStackTrace();
+    CyclicBehaviour obstacle_detection = new CyclicBehaviour() {
+        @Override
+        public void action() {
+            try{
+                int freeDistance = Device.sampleFrontDistance();
+                obstacleExists = freeDistance < obstacleDistanceThreshold;
+            }
+            catch(Exception e){
+                e.printStackTrace();
+            }
         }
     };
 
@@ -94,7 +98,7 @@ public class RobotAgent extends Agent {
 
      */
 
-
+    /*
     // takes 2 params, send a message every tick
     TickerBehaviour lowBattery = new TickerBehaviour(this, 100) {
         @Override
@@ -115,7 +119,7 @@ public class RobotAgent extends Agent {
             }
         }
     };
-
+     */
     /*
     //behaviours for robot movement - too fine grained?
     OneShotBehaviour go_forward = new OneShotBehaviour() {
@@ -235,6 +239,7 @@ public class RobotAgent extends Agent {
     };
     */
 
+    /*
     CyclicBehaviour message_recieve = new CyclicBehaviour() {
         public void action() {
             ACLMessage msg = receive();
@@ -272,6 +277,8 @@ public class RobotAgent extends Agent {
             block();
         }
     };
+
+     */
 
     /*
     Behaviour move = new Behaviour() {
@@ -377,6 +384,7 @@ public class RobotAgent extends Agent {
         }
     };
 
+    /*
     OneShotBehaviour message_send = new OneShotBehaviour() {
         @Override
         public void action() {
@@ -392,6 +400,8 @@ public class RobotAgent extends Agent {
             send(messageTemplate);
         }
     };
+
+     */
 
     SequentialBehaviour mission = new SequentialBehaviour();
 
@@ -424,9 +434,9 @@ public class RobotAgent extends Agent {
             //PID controlled line following behaviour
             try {
                 //get light sensor reading from device
-                float light = Device.sampleLightIntensity();
-                controller.updateVals(light);
-                int[] motorSpeeds = controller.recalibrate();
+                float sample = Device.sampleLightIntensity();
+                //controller.updateVal(sample);
+                int[] motorSpeeds = controller.recalibrate(sample);
                 //set device motor speeds to new values calculated by PID controller
                 Device.setMotorSpeeds(motorSpeeds[1], motorSpeeds[2]);
 
@@ -434,25 +444,40 @@ public class RobotAgent extends Agent {
                 e.printStackTrace();
             }
         }
-    }
+    };
 
+    OneShotBehaviour start_moving = new OneShotBehaviour() {
+        @Override
+        public void action() {
+            try {
+                System.out.println("Boogie commence...");
+                //Device.startMoveForward();
+                //Delay.msDelay(2000);
+                Device.stop();
+                Device.startMoveForward();
 
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    };
 
-
+/*
     public RobotAgent() throws MqttException {
     }
-
+*/
     protected void setup() {
 
         //BEHAVIOURS (for our scenarios):
         //PID for following (cyclic behaviour for checking distance and updating speed)
         //follow predefined path (one shot behaviour for just following a hardcoded set of instructions)
 
+        addBehaviour(start_moving);
         addBehaviour(follow_line);
-        addBehaviour(obstacle_check);
-        addBehaviour(init_message);
+        //addBehaviour(obstacle_check);
+        //addBehaviour(init_message);
         //   addBehaviour(lowBattery);
-        addBehaviour(message_recieve);
+        //addBehaviour(message_recieve);
 
         //  addBehaviour(tck);
         //    addBehaviour(turn_left);

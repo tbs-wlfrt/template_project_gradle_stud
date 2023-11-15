@@ -6,18 +6,28 @@ import ev3dev.sensors.ev3.EV3ColorSensor;
 import ev3dev.sensors.ev3.EV3UltrasonicSensor;
 import lejos.hardware.port.MotorPort;
 import lejos.hardware.port.SensorPort;
+import lejos.robotics.SampleProvider;
+import lejos.robotics.filter.MaximumFilter;
 import lejos.utility.Delay;
 
 public class Device {
     //Motors instantiation
-    static EV3MediumRegulatedMotor motor1 = null;
-    static EV3MediumRegulatedMotor motor2 = null;
+    static EV3MediumRegulatedMotor motor1;
+    static EV3MediumRegulatedMotor motor2;
 
     // The declaration of the ultrasonic sensor.
-    static EV3UltrasonicSensor ultrasonicSensor = null;
-    static EV3ColorSensor colorSensor = null;
+    static EV3UltrasonicSensor ultrasonicSensor;
+    static EV3ColorSensor colorSensor;
 
     static int sleepIntervalInMilliSeconds = 5;
+
+    //sample providers
+    static SampleProvider ultrasonicSP;
+    static SampleProvider colorSP;
+    static SampleProvider colorMax;
+
+
+
 
 
     public static void init() {
@@ -28,6 +38,14 @@ public class Device {
 
         ultrasonicSensor = new EV3UltrasonicSensor(SensorPort.S1);
         colorSensor = new EV3ColorSensor(SensorPort.S2);
+
+        ultrasonicSP = ultrasonicSensor.getDistanceMode();
+
+        colorSP = colorSensor.getRGBMode();
+        colorMax = new MaximumFilter(colorSP, 5);
+
+
+        Delay.msDelay(1000); // Wait for the sensors to initialise.
 
         System.out.println("Finished initialisation.");
     }
@@ -151,12 +169,26 @@ public class Device {
     }
 
     /**
+     * Sample the front ultrasonic sensor and return distance reading.
+     * @return current distance reading from the sensor.
+     */
+    public static int sampleFrontDistance(){
+        float[] sample = new float[colorSP.sampleSize()];
+        ultrasonicSP.fetchSample(sample, 0);
+        return (int) sample[0];
+    }
+
+
+    /**
      * Sample the light sensor and return intensity reading.
      * @return current light intensity reading from the sensor.
      */
     public static float sampleLightIntensity(){
-        //TODO: return light intensity value from colour sensor
-        return 0;
+        float[] sample = new float[colorSP.sampleSize()];
+        colorMax.fetchSample(sample, 0);
+
+        //float[] vals = new float[2];
+        return sample[0];
     }
 
     /**
