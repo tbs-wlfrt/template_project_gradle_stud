@@ -46,13 +46,18 @@ global{
 	predicate rotate_towards <- new_predicate("rotating towards");
 	
 	int instance_count <- 1;
+	int obstacle_count <- 10;
+	int crate_count <- 10;
+	
+	
 	int rotation <- 120;
 	geometry cratesgeom;
 	geometry obstaclesgeom;
+	
 	init {
 		create robot number: instance_count;
-		create crate number: 10;
-		create obstacle number: 20;
+		create crate number: crate_count;
+		create obstacle number: obstacle_count;
 		create drop_off_point number: 1;
 		cratesgeom <- union(crate collect each.geo);
 		obstaclesgeom <- union(obstacle collect each.geo);
@@ -82,7 +87,7 @@ species robot skills: [moving] control: simple_bdi{
 		int avoidrectlen <- 20;
 		rect <- (rectangle(2,rectlen) translated_by point(r*rectlen/2)) rotated_by (heading+90);
 		draw rect  color:#yellow;
-		avoidrect <- (rectangle(2,avoidrectlen) translated_by point(r*avoidrectlen/2)) rotated_by (heading+90);
+		avoidrect <- rectangle(2,avoidrectlen) translated_by point(r*avoidrectlen/2) rotated_by (heading+90);
 		draw avoidrect  color:#orange;
 		draw triangle(10) rotated_by (heading+90) color: color;
 	}
@@ -214,6 +219,8 @@ species drop_off_point {
 
 experiment collect_crates type: gui {
 	parameter "rotation" var: rotation min:0 max:359 ;
+	parameter "obstacle_count" var: obstacle_count;
+	parameter "crate count" var: crate_count;
 	output {
 		display main_display type: 2d background: #grey{
 			species robot aspect: base;
@@ -226,6 +233,8 @@ experiment collect_crates type: gui {
 
 experiment avoid_obstacle type: gui{
 		parameter "rotation" var: rotation min:0 max:359 ;
+		parameter "obstacle_count" var: obstacle_count;
+		parameter "crate count" var: crate_count;
 		output {
 			display main_display type: 2d background: #grey{
 			species robot aspect: base;
