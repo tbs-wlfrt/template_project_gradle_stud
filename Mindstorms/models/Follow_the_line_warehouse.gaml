@@ -66,7 +66,7 @@ global {
 		
 		// Create the obstacels
 		create obstacle number: obstacle_count;
-		obstaclesgeom <- union(obstacle collect each.geo);
+		obstaclesgeom <- union(obstacle collect each.geo);  // TOOD: We can add the robot to this potentially.
     }
 }
 
