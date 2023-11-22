@@ -1,10 +1,9 @@
-package OurCode;
+package OurCode.Helpers;
 
 
 import lejos.utility.Delay;
 
 public class PIDController {
-
     double[] vals = new double[2];
 
     int setPoint = 15;
@@ -21,7 +20,7 @@ public class PIDController {
     long previousTime = 0;
 
     // constructor
-    PIDController(int distance, double proportionality){
+    public PIDController(int distance, double proportionality){
         // define how far we want the robot to keep its distance
         setPoint = distance;
         previousTime = System.currentTimeMillis();

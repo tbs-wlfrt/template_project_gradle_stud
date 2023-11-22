@@ -1,4 +1,4 @@
-package OurCode;
+package OurCode.Devices;
 
 import OurCode.Helpers.PIDController;
 import OurCode.Helpers.Turner;
@@ -9,7 +9,10 @@ import lejos.hardware.port.SensorPort;
 import lejos.robotics.SampleProvider;
 import lejos.utility.Delay;
 
-public class FirstSession {
+import jade.core.behaviours.*;
+
+
+public class SensorMotorDevice {
 
     // TODO: Find out which of these is left and which of these is right and add the code here.
     static EV3MediumRegulatedMotor motor1 = new EV3MediumRegulatedMotor(MotorPort.B); // left
@@ -48,7 +51,7 @@ public class FirstSession {
      * Turn the robot counter-clockwise around the center-point of rotation for *time* duration.
      * @param time The duration in ms to turn for.
      */
-    public static void turnLeftInPlace(int time){
+    OneShotBehaviour turnLeftInPlace(int time){
         motor1.forward(); sync();
         motor2.backward(); sync();
 
@@ -61,7 +64,7 @@ public class FirstSession {
     /**
      * Start to move the robot forward indefinitely.
      */
-    public static void startMoveForward(){
+    OneShotBehaviour startMoveForward = () -> {
         motor1.backward(); sync();
         motor2.backward(); sync();
     }
