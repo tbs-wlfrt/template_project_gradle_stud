@@ -52,7 +52,7 @@ public class RobotAgent extends Agent {
         //follow predefined path (one shot behaviour for just following a hardcoded set of instructions)
         SequentialBehaviour go = new SequentialBehaviour();
         addBehaviour(go);
-        go.addSubBehaviour(pid_follower);
+        go.addSubBehaviour(follow_line_routine);
         //addBehaviour(obstacle_check);
         //addBehaviour(init_message);
         //   addBehaviour(lowBattery);
@@ -63,7 +63,7 @@ public class RobotAgent extends Agent {
     }
 
 
-    CyclicBehaviour pid_follower = new CyclicBehaviour() {
+    CyclicBehaviour pid_follower_routine = new CyclicBehaviour() {
         @Override
         public void action() {
             Delay.msDelay(100);
@@ -80,6 +80,28 @@ public class RobotAgent extends Agent {
         }
     };
 
+
+    CyclicBehaviour follow_line_routine = new CyclicBehaviour() {
+        @Override
+        public void action() {
+            Delay.msDelay(20);
+            //PID controlled line following behaviour
+            try {
+                //get light sensor reading from device
+                float sample = Device.sampleLightIntensity();
+                Device.sync(20);
+                //controller.updateVal(sample);
+                int[] motorSpeeds = colorPID.recalibrate(sample);
+                System.out.println("\nGOT: " + sample + "" + "\nMotorspeeds:" + motorSpeeds[0] + ", " + motorSpeeds[1]);
+                //set device motor speeds to new values calculated by PID controller
+                Device.setMotorSpeeds(130-motorSpeeds[0], 130-motorSpeeds[1]);
+                Device.startMoveForward();
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    };
     /*
         BEHAVIOUR DEFINITIONS
      */
@@ -467,25 +489,7 @@ public class RobotAgent extends Agent {
         }
     };
 
-    CyclicBehaviour follow_line = new CyclicBehaviour() {
-        @Override
-        public void action() {
-            //PID controlled line following behaviour
-            try {
-                //get light sensor reading from device
-                float sample = Device.sampleLightIntensity();
-                Device.sync(20);
-                //controller.updateVal(sample);
-                int[] motorSpeeds = colorPID.recalibrate(sample);
-                System.out.println("\nGOT: " + sample + "" + "\nMotorspeeds:" + motorSpeeds[0] + ", " + motorSpeeds[1]);
-                //set device motor speeds to new values calculated by PID controller
-                // Device.setMotorSpeeds(motorSpeeds[0], motorSpeeds[1]);
 
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-    };
 
     OneShotBehaviour start_moving = new OneShotBehaviour() {
         @Override

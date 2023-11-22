@@ -36,11 +36,11 @@ public class ColorPIDController {
         int error1 = 0;
         int error2 = 0;
         if (val > 20 && val <= 75){
-            error1 = (int) (val - setPoint);
+            error1 = (int) (setPoint - val);
         }
 
         if (val > 75 && val <= 156){
-            error2 = (int) (val - setPoint);
+            error2 = (int) (setPoint - val);
         }
 
         cumError1 += error1*elapsedTime;
@@ -65,6 +65,11 @@ public class ColorPIDController {
         }
 
         */
+        if (output1 <0)
+            output1=output1*-1;
+
+        if (output2 <0)
+            output2=output2*-1;
 
         return new int[]{output1, output2};
     }
