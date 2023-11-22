@@ -1,7 +1,7 @@
-package OGAgent;
+package OurCode.Helpers;
 
 
-public class PIDController {
+public class ColorPIDController {
 
     float val;//s = new float[2];
 
@@ -21,13 +21,13 @@ public class PIDController {
     long previousTime = 0;
 
     // constructor
-    PIDController(int set){
+    public ColorPIDController(int set){
         // define how far we want the robot to keep its distance
         setPoint = set;
         previousTime = System.currentTimeMillis();
     }
 
-    int[] recalibrate(float currDistance){
+    public int[] recalibrate(float currDistance){
         val = currDistance;
 
         long currentTime = System.currentTimeMillis();

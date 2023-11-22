@@ -23,7 +23,7 @@ public class container1 {
             container1.start();
 
             AgentController agent1=agentContainer.createNewAgent("Agent1",
-                    "Connexion.Agent1",new Object[]{});
+                    "OurCode.Connexion.Agent1",new Object[]{});
             agent1.start();
         } catch (Exception e) {
             // TODO Auto-generated catch block

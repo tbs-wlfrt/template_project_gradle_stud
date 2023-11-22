@@ -1,5 +1,6 @@
-package OGAgent;
+package OurCode.Connexion;
 
+import OurCode.Devices.Device;
 import jade.core.Profile;
 import jade.core.ProfileImpl;
 import jade.core.Runtime;
@@ -11,8 +12,8 @@ public class TestContainer {
         try {
             Runtime runtime = Runtime.instance();
 
-            String target = "192.168.0.111";
-            String source = "192.168.0.158";
+            String source = "192.168.0.111";
+            String target = "192.168.0.158";
             ProfileImpl p = new ProfileImpl(target, 1099, null, false);
 
             p.setParameter(Profile.LOCAL_HOST, source);
@@ -22,7 +23,7 @@ public class TestContainer {
             TestContainer.start();
 
             System.out.println("RobotAgent");
-            AgentController robotAgent = agentContainer.createNewAgent("RobotAgent", "OGAgent.RobotAgent", new Object[]{});
+            AgentController robotAgent = agentContainer.createNewAgent("RobotAgent", "OurCode.Connexion.RobotAgent", new Object[]{});
 
             System.out.println("Starting...");
             robotAgent.start();

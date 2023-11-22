@@ -1,5 +1,7 @@
-package OurCode.Helpers;
+package OurCode.FIRST_CODE;
 
+
+import lejos.utility.Delay;
 
 public class PIDController {
     double[] vals = new double[2];
@@ -18,13 +20,13 @@ public class PIDController {
     long previousTime = 0;
 
     // constructor
-    public PIDController(int distance){
+    public PIDController(int distance, double proportionality){
         // define how far we want the robot to keep its distance
         setPoint = distance;
         previousTime = System.currentTimeMillis();
     }
 
-    public int recalibrate(){
+    int recalibrate(){
         long currentTime = System.currentTimeMillis();
         long elapsedTime = currentTime - previousTime;
 
@@ -49,7 +51,7 @@ public class PIDController {
     }
 
     // update the error tuple
-    public void updateVals(double currDistance){
+    void updateVals(double currDistance){
         // set the current most recent to the old value
         vals[0] = vals[1];
         // set the newly read value as the most recent

@@ -1,4 +1,4 @@
-package OGAgent;
+package OurCode.Devices;
 
 
 import ev3dev.actuators.lego.motors.EV3MediumRegulatedMotor;
@@ -36,8 +36,8 @@ public class Device {
         motor1 = new EV3MediumRegulatedMotor(MotorPort.B); // left
         motor2 = new EV3MediumRegulatedMotor(MotorPort.C); // right
 
-        ultrasonicSensor = new EV3UltrasonicSensor(SensorPort.S1);
-        colorSensor = new EV3ColorSensor(SensorPort.S2);
+        ultrasonicSensor = new EV3UltrasonicSensor(SensorPort.S3);
+        colorSensor = new EV3ColorSensor(SensorPort.S1);
 
         ultrasonicSP = ultrasonicSensor.getDistanceMode();
 
@@ -59,7 +59,9 @@ public class Device {
     public static void sync(){
         Delay.msDelay(sleepIntervalInMilliSeconds);
     }
-
+    public static void sync(int multiplier){
+        Delay.msDelay((long) multiplier *sleepIntervalInMilliSeconds);
+    }
     /**
      * Turn the robot clockwise around the center-point of rotation for *time* duration.
      * @param time The duration in ms to turn for.
