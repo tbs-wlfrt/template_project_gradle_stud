@@ -1,7 +1,7 @@
 package OurCode;
 
-import OurCode.FIRST_CODE.PIDController;
-import OurCode.Helpers.Turner;
+import OurCode.Helpers.PIDController;
+
 import ev3dev.actuators.lego.motors.EV3MediumRegulatedMotor;
 import ev3dev.sensors.ev3.EV3UltrasonicSensor;
 import lejos.hardware.port.MotorPort;
@@ -15,7 +15,7 @@ public class FirstSession {
     static EV3MediumRegulatedMotor motor1 = new EV3MediumRegulatedMotor(MotorPort.B); // left
     static EV3MediumRegulatedMotor motor2 = new EV3MediumRegulatedMotor(MotorPort.C); // right
     // The declaration of the ultrasonic sensor.
-    static EV3UltrasonicSensor ultrasonicSensor = new EV3UltrasonicSensor(SensorPort.S1);
+    static EV3UltrasonicSensor ultrasonicSensor = new EV3UltrasonicSensor(SensorPort.S3);
 
     // Interval used to sleep between consecutive commands.
     static int sleepIntervalInMilliSeconds = 5;
@@ -158,16 +158,16 @@ public class FirstSession {
     // The main event loop of the program.
     public static void main(String[] args) {
 
-        float trackSize = 13f;
-        float wheelSize = 5.6f;
-        int ninetyDegrees = (int)Math.floor(Turner.calculatePivot(90, wheelSize, trackSize));
+//        float trackSize = 13f;
+//        float wheelSize = 5.6f;
+//        int ninetyDegrees = (int)Math.floor(Turner.calculatePivot(90, wheelSize, trackSize));
 
         int speedMultiplier = 40;
-        PIDController pidController = new PIDController(50, 0.5);
+        PIDController pidController = new PIDController(50);
 
+        Delay.msDelay(1000); // Needed to wait for the sensor to initialise.
 
         SampleProvider sp = ultrasonicSensor.getDistanceMode();
-        Delay.msDelay(1000); // Needed to wait for the sensor to initialise.
         float[] sample = new float[sp.sampleSize()];
 
         motor1.backward();
@@ -177,7 +177,7 @@ public class FirstSession {
         //startMoveForward();
 
 
-        Delay.msDelay(500);
+//        Delay.msDelay(500);
 
         while(true){
 
@@ -186,7 +186,16 @@ public class FirstSession {
             int distanceValue = (int) sample[0];
             System.out.println("Distance: " + distanceValue);
 
-            /*
+//            PID stuff
+            pidController.updateVals(distanceValue);
+            int speed = (int) Math.min(pidController.recalibrate()*speedMultiplier, 1000);
+            System.out.println("speed: " + speed);
+            motor1.setSpeed(speed); sync();
+            motor2.setSpeed(speed); sync();
+
+            motor2.backward(); sync();
+            motor1.backward(); sync();
+/*
             //avoid obstacle (basic) stuff
             if (distanceValue < 20){
                 stop();
@@ -201,31 +210,25 @@ public class FirstSession {
             }
             */
 
-            //PID stuff
-            //pidController.updateVals(distanceValue);
-            //int speed = (int) Math.min(pidController.recalibrate()*speedMultiplier, 1000);
-            //System.out.println("speed: " + speed);
-            //motor1.setSpeed(speed); sync();
-            //motor2.setSpeed(speed); sync();
+//            //"follow path" stuff
+//            moveForward(2000);
+//            turnLeftInPlace(500);
+//            moveForward(1000);
+//            turnLeftInPlace(500);
+//            moveForward(1000);
+//            turnLeftInPlace(500);
+//            moveForward(2000);
+//            turnRightInPlace(500);
+//            moveForward(1000);
+//            turnRightInPlace(500);
+//            moveForward(1000);
+//            turnRightInPlace(500);
+//            moveBackwards(3000);
 
-
-            //"follow path" stuff
-            moveForward(2000);
-            turnLeftInPlace(500);
-            moveForward(1000);
-            turnLeftInPlace(500);
-            moveForward(1000);
-            turnLeftInPlace(500);
-            moveForward(2000);
-            turnRightInPlace(500);
-            moveForward(1000);
-            turnRightInPlace(500);
-            moveForward(1000);
-            turnRightInPlace(500);
-            moveBackwards(3000);
-
-            break;
+//            break;
         }
+
+
         // Setup the ultrasonicSensor (todo: there might be a better way to do this)
 //        SampleProvider sp = ultrasonicSensor.getDistanceMode();
 //        Delay.msDelay(1000); // Needed to wait for the sensor to initialise.
@@ -269,9 +272,6 @@ public class FirstSession {
 //        // turnLeftInPlace(550); // 180
 //         // turnRightInPlace(5000);
 
-      //  return;
-
+        //  return;
     }
-
 }
-

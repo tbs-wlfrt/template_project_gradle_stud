@@ -175,7 +175,7 @@ public class Device {
      * @return current distance reading from the sensor.
      */
     public static int sampleFrontDistance(){
-        float[] sample = new float[colorSP.sampleSize()];
+        float[] sample = new float[ultrasonicSP.sampleSize()];
         ultrasonicSP.fetchSample(sample, 0);
         return (int) sample[0];
     }

@@ -21,7 +21,8 @@ public class RobotAgent extends Agent {
     boolean onMission = false;
 
     ColorPIDController colorPID = new ColorPIDController(75);
-    PIDController distancePID = new PIDController(75);
+    PIDController distancePID = new PIDController(50);
+    int speedMultiplier = 40;
 
     String mission_type = ""; // the mission the agent has to complete
 
@@ -52,7 +53,6 @@ public class RobotAgent extends Agent {
         SequentialBehaviour go = new SequentialBehaviour();
         addBehaviour(go);
         go.addSubBehaviour(pid_follower);
-        go.addSubBehaviour(start_moving);
         //addBehaviour(obstacle_check);
         //addBehaviour(init_message);
         //   addBehaviour(lowBattery);
@@ -67,12 +67,16 @@ public class RobotAgent extends Agent {
         @Override
         public void action() {
             Delay.msDelay(100);
-            float distance = Device.sampleFrontDistance();
+            int distance = Device.sampleFrontDistance();
+            System.out.println("Speed: " + distance);
 
             distancePID.updateVals(distance);
-            int speed = (int) Math.min(distancePID.recalibrate()*40, 1000);
-            System.out.println("Speed: " + speed);
+            int speed = (int) Math.min(distancePID.recalibrate()*speedMultiplier, 1000);
+            System.out.println("speed: " + speed);
+
+            //System.out.println("Speed: " + speed);
             Device.setMotorSpeeds(speed, speed);
+            Device.startMoveForward();
         }
     };
 
