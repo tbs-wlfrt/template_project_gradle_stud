@@ -20,6 +20,7 @@ global {
 		add point(90,10) to: drop_nodes;
 		add point(10,90) to: drop_nodes;
 		add point(90,90) to: drop_nodes;
+		
 		loop nod over: drop_nodes {
 	    	movement_graph <- movement_graph add_node(nod);
 		}	
@@ -29,11 +30,12 @@ global {
 		movement_graph <- movement_graph add_edge(drop_nodes at 0::drop_nodes at 2);
 		movement_graph <- movement_graph add_edge(drop_nodes at 2::drop_nodes at 3);
 		movement_graph <- movement_graph add_edge(drop_nodes at 1::drop_nodes at 3);
+		movement_graph <- movement_graph add_edge(drop_nodes at 1::drop_nodes at 3);
 		
 		// Calculate the weight based on the length of the edges so that the robot moves the same speed everywhere.
 		// movement_graph <- movement_graph with_weights (movement_graph.edges as_map (each:: geometry(each).perimeter));
 		edge_weights <- [
-			geometry(movement_graph.edges at 0).perimeter,
+			geometry(movement_graph.edges at 0).perimeter*0.5, // To make one robot faster than the other
 			geometry(movement_graph.edges at 1).perimeter*2,
 			geometry(movement_graph.edges at 2).perimeter*2,
 			geometry(movement_graph.edges at 3).perimeter
@@ -65,12 +67,14 @@ species robot skills: [moving]{
 	init{}
 	
 	aspect base{
-		draw circle(2) color: aspect_color;
+		// draw circle(2) color: aspect_color;
 		// Draw the rect
 		// Avoidance rectangle
 		point r <- point(sin(heading+90), -cos(heading+90));
 		avoidrect <- rectangle(2,sensor_range) translated_by point(r*sensor_range/2) rotated_by (heading+90);
 		draw avoidrect  color:#orange;
+		
+		draw image("robot.png") size: {10, 15} rotate: (heading-90);
 	}
 	
 	// Base reflex that drives the robot to move
@@ -129,9 +133,30 @@ species robot skills: [moving]{
 		}
 		// TODO: This kind of works for now.
 		if (avoidrect overlaps (union(robot collect geometry(each)) - geometry(self))){
-			flag <- true;
+			// which robot and 
+			
+			
+			loop rob over: robot{
+				// check which overlaps
+				if (rob = self){ continue; }
+				if (avoidrect overlaps geometry(rob)){
+					// Found the overlapping
+					
+					float rob_distance <- distance_to(rob.location, rob.last);
+					float our_disrtance <- distance_to(self.location, self.last);
+					if(rob_distance < our_disrtance){
+						write name+": other robot is shorter";
+						speed <- 0;
+					}else{
+						// TODO: Need to wait first before this is done.
+						write name+": we are shorter";
+						flag <- true; // TODO: THis is still not ideal yet.
+					}
+				}
+			}
+		}else{
+			speed <- 1; // TODO: This is very hacky so not sure this is great
 		}
-		// Also cehck for the
 	}
 	
 	user_command "Send Battery Warning" action: battery_warning;
