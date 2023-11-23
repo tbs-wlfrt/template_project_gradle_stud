@@ -193,6 +193,19 @@ public class Device {
         return sample[0];
     }
 
+
+    /**
+     * Sample the light sensor and return intensity reading.
+     * @return current light intensity reading from the sensor.
+     */
+    public static float sampleColor(){
+        float[] sample = new float[colorSP.sampleSize()];
+        colorMax.fetchSample(sample, 0);
+
+        //float[] vals = new float[2];
+        return sample[0];
+    }
+
     /**
      * Sample the light sensor and return intensity reading.
      * @param speed1 speed for motor 1.

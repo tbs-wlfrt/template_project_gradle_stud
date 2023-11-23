@@ -5,11 +5,14 @@ public class ColorPIDController {
 
     float val;//s = new float[2];
 
-    int setPoint = 76;
+    int setPoint = 33;
+    int fullBlack = 5;           //Lower bound for the sensor reading all black
+    int fullWhite = 500;           //Upper bound for the sensor reading all white
 
-    double kp = 3.60F;//1.6F; // try 1.6
+    double kp = 0.8F;//1.6F;//3.60F;//1.6F; // try 1.6
     double ki = 0.00001F;
     double kd = 20.2F;//3.2F;
+
 
     // define error vars
     int lastError1 = 0;
@@ -27,19 +30,26 @@ public class ColorPIDController {
         previousTime = System.currentTimeMillis();
     }
 
-    public int[] recalibrate(float currDistance){
-        val = currDistance;
+    public int[] recalibrate(float currColor){
+        val = currColor;
 
         long currentTime = System.currentTimeMillis();
         long elapsedTime = currentTime - previousTime;
 
         int error1 = 0;
         int error2 = 0;
-        if (val > 20 && val <= 75){
+
+        if (val < 5){ // don't change anything (polling too fast)
+            return new int[]{0,0};
+        }
+
+
+        // range black [5, 33]
+        if (val >= fullBlack && val <= setPoint){
             error1 = (int) (setPoint - val);
         }
 
-        if (val > 75 && val <= 156){
+        if (val > setPoint && val <= fullWhite){
             error2 = (int) (setPoint - val);
         }
 
@@ -59,12 +69,6 @@ public class ColorPIDController {
 
         previousTime = currentTime;
 
-        /*
-        if (error1 == 0){
-            return 0;
-        }
-
-        */
         if (output1 <0)
             output1=output1*-1;
 

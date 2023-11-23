@@ -20,9 +20,10 @@ public class RobotAgent extends Agent {
     int obstacleDistanceThreshold = 25; // the maximum acceptable distance required between the agent and the obstacle
     boolean onMission = false;
 
-    ColorPIDController colorPID = new ColorPIDController(75);
+    ColorPIDController colorPID = new ColorPIDController(33);
     PIDController distancePID = new PIDController(50);
     int speedMultiplier = 40;
+    int motorsFullSpeed = 150;
 
     String mission_type = ""; // the mission the agent has to complete
 
@@ -61,7 +62,27 @@ public class RobotAgent extends Agent {
         //  addBehaviour(tck);
         //    addBehaviour(turn_left);
     }
+    CyclicBehaviour check_colour = new CyclicBehaviour() {
+        @Override
+        public void action() {
+            Delay.msDelay(100);
+            int colour = 1;
+            System.out.println("Colour: " + colour);
 
+
+
+            int distance = Device.sampleFrontDistance();
+            System.out.println("Speed: " + distance);
+
+            distancePID.updateVals(distance);
+            int speed = (int) Math.min(distancePID.recalibrate()*speedMultiplier, 1000);
+            System.out.println("speed: " + speed);
+
+            //System.out.println("Speed: " + speed);
+            Device.setMotorSpeeds(speed, speed);
+            Device.startMoveForward();
+        }
+    };
 
     CyclicBehaviour pid_follower_routine = new CyclicBehaviour() {
         @Override
@@ -84,17 +105,17 @@ public class RobotAgent extends Agent {
     CyclicBehaviour follow_line_routine = new CyclicBehaviour() {
         @Override
         public void action() {
-            Delay.msDelay(20);
+            Delay.msDelay(50);
             //PID controlled line following behaviour
             try {
                 //get light sensor reading from device
                 float sample = Device.sampleLightIntensity();
                 Device.sync(20);
                 //controller.updateVal(sample);
-                int[] motorSpeeds = colorPID.recalibrate(sample);
-                System.out.println("\nGOT: " + sample + "" + "\nMotorspeeds:" + motorSpeeds[0] + ", " + motorSpeeds[1]);
+                int[] motorSpeedsReduction = colorPID.recalibrate(sample);
+                System.out.println("\nGOT: " + sample + "" + "\nMotorspeeds:" + motorSpeedsReduction[0] + ", " + motorSpeedsReduction[1]);
                 //set device motor speeds to new values calculated by PID controller
-                Device.setMotorSpeeds(130-motorSpeeds[0], 130-motorSpeeds[1]);
+                Device.setMotorSpeeds(motorsFullSpeed-motorSpeedsReduction[0], motorsFullSpeed-motorSpeedsReduction[1]);
                 Device.startMoveForward();
 
             } catch (Exception e) {
@@ -102,6 +123,8 @@ public class RobotAgent extends Agent {
             }
         }
     };
+
+
     /*
         BEHAVIOUR DEFINITIONS
      */
