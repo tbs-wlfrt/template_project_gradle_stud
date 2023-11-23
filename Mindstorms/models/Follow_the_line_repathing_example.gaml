@@ -1,6 +1,8 @@
 model follow_the_line_warehouse
 
 global {
+	int sensor_range <- 20;
+	
 	// The graph that the robots move on.
 	graph movement_graph<-spatial_graph([]);
 	// The nodes that make up the graph.
@@ -10,7 +12,7 @@ global {
 	// The triage point.
 	list<point> triage_nodes;
 	// The weights of the graph.
-	list<int> edge_weights <- [5, 10, 10, 5];
+	list<float> edge_weights <- [5, 10, 10, 5];
 	
     init {
     	// Add the points to the list and graph:
@@ -30,6 +32,12 @@ global {
 		
 		// Calculate the weight based on the length of the edges so that the robot moves the same speed everywhere.
 		// movement_graph <- movement_graph with_weights (movement_graph.edges as_map (each:: geometry(each).perimeter));
+		edge_weights <- [
+			geometry(movement_graph.edges at 0).perimeter,
+			geometry(movement_graph.edges at 1).perimeter*2,
+			geometry(movement_graph.edges at 2).perimeter*2,
+			geometry(movement_graph.edges at 3).perimeter
+		];
 		movement_graph <-  with_weights (movement_graph, edge_weights);
 	
 		// Create the robots
@@ -51,11 +59,18 @@ species robot skills: [moving]{
 	bool flag <- false;
 	int last_edge; // Pointer to the last egde the robot has traveresd in the graph
 	point last; // The last node the robot has passed.
-
+	
+	geometry avoidrect;
+	
 	init{}
 	
 	aspect base{
 		draw circle(2) color: aspect_color;
+		// Draw the rect
+		// Avoidance rectangle
+		point r <- point(sin(heading+90), -cos(heading+90));
+		avoidrect <- rectangle(2,sensor_range) translated_by point(r*sensor_range/2) rotated_by (heading+90);
+		draw avoidrect  color:#orange;
 	}
 	
 	// Base reflex that drives the robot to move
@@ -106,13 +121,40 @@ species robot skills: [moving]{
 			flag <- false;	
 		}
 	}
+	
+	// TODO: This can and should be done better.
+	reflex collision{
+		if (avoidrect overlaps union(obstacle collect each.geo)){
+			flag <- true;
+		}
+		// TODO: This kind of works for now.
+		if (avoidrect overlaps (union(robot collect geometry(each)) - geometry(self))){
+			flag <- true;
+		}
+		// Also cehck for the
+	}
+	
+	user_command "Send Battery Warning" action: battery_warning;
+	action battery_warning {
+		write name+": Battery is low."; // TODO: Put some logic behind this
+	}
+}
+
+
+species obstacle {
+	geometry geo <- square(4);
+	bool should_die <- false;
+	
+	aspect base{
+		draw geo color: #brown;
+	}
+	
+	reflex{ if should_die { do die; }}
 }
 
 experiment MyExperiment type: gui {
 	action my_action{
 		write #user_location; // Use this to get the mouse location
-		
-		
 		
 		// Currently a POC this will be redone eventually.
 		// movement_graph <- with_weights (movement_graph, [500, 10, 10, 500]);
@@ -122,9 +164,27 @@ experiment MyExperiment type: gui {
 		}
 	}
 	
+	action place_obstacle {
+		// Create a new obstacle on the location the user clicked.	
+		if (not (#user_location overlaps union(obstacle collect each.geo))){
+			create obstacle number: 1 with: (location: #user_location);
+		}
+	}
+	
+	// Remove all the obstacles
+	action clean_obstacles{	
+		loop ob over: obstacle {
+			ob.should_die <- true;
+		}
+	}
+	
+	user_command "Clear all Obstacles" action: clean_obstacles category:"Obstacles";
+	parameter "Sensor Range" var: sensor_range;
+	
     output {
 		display MyDisplay /*type: 2d*/ {
 			event mouse_down action: my_action;
+			event 'o' action: place_obstacle; // place an obstacle if the o key is pressed.
 			
 			// TODO: Find a better way to draw this
 		    graphics "shortest path" {
@@ -144,7 +204,7 @@ experiment MyExperiment type: gui {
 				    draw geometry(edges) color: #black;
 				}  
 		    }
-		    
+		    species obstacle aspect: base;
 		    species robot aspect: base;
 		}
     }
