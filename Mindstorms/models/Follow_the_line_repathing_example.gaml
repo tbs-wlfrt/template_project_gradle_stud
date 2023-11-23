@@ -3,145 +3,108 @@ model follow_the_line_warehouse
 global {
 	// The graph that the robots move on.
 	graph movement_graph<-spatial_graph([]);
-	// Keeps track of the weight of the edges in the graph so that the robots move speed is consitent.
-	// map<geometry, float> graph_weights;
-	
-	// - TODO: Think about if it is better to make this specieses instead of points.
 	// The nodes that make up the graph.
 	list<point> nodes;
-	// The drop on and drop off points
+	// The drop on and drop off points.
 	list<point> drop_nodes;
-	// The triage point
+	// The triage point.
 	list<point> triage_nodes;
-	
-	
-	list<int> w <- [5, 10, 10, 5];
+	// The weights of the graph.
+	list<int> edge_weights <- [5, 10, 10, 5];
 	
     init {
-    	// Add the nodes:
+    	// Add the points to the list and graph:
 		add point(10,10) to: drop_nodes;
 		add point(90,10) to: drop_nodes;
 		add point(10,90) to: drop_nodes;
 		add point(90,90) to: drop_nodes;
-				
-	
 		loop nod over: drop_nodes {
 	    	movement_graph <- movement_graph add_node(nod);
 		}	
+		
 		// Add the connections between the nodes
 		movement_graph <- movement_graph add_edge(drop_nodes at 0::drop_nodes at 1);
 		movement_graph <- movement_graph add_edge(drop_nodes at 0::drop_nodes at 2);
 		movement_graph <- movement_graph add_edge(drop_nodes at 2::drop_nodes at 3);
 		movement_graph <- movement_graph add_edge(drop_nodes at 1::drop_nodes at 3);
 		
-	
 		// Calculate the weight based on the length of the edges so that the robot moves the same speed everywhere.
-		// graph_weights <- movement_graph.edges as_map (each:: geometry(each).perimeter);
 		// movement_graph <- movement_graph with_weights (movement_graph.edges as_map (each:: geometry(each).perimeter));
-		movement_graph <-  with_weights (movement_graph, w);
+		movement_graph <-  with_weights (movement_graph, edge_weights);
 	
 		// Create the robots
-		create robot number: 1 with: (location: drop_nodes at 0, _color: #green, target: drop_nodes at 3, mg: copy(movement_graph), name: "green");
-		create robot number: 1 with: (location: drop_nodes at 3, _color: #red, target: drop_nodes at 0, mg: copy(movement_graph), name: "red");
+		create robot number: 1 with: (location: drop_nodes at 0, aspect_color: #green, target: drop_nodes at 3, mg: copy(movement_graph), name: "green");
+		create robot number: 1 with: (location: drop_nodes at 3, aspect_color: #red, target: drop_nodes at 0, mg: copy(movement_graph), name: "red");
     }
 }
 
 // TODO: Change this to take a list of drop of points and also integrate the more advanced behaviour.
 species robot skills: [moving]{
-	point target;
-	path route;
-	rgb _color;
-	graph mg;
-	string name;
+	graph mg; // The local copy of the graph that the robot has TODO: Think about this is still needed
 	
+	point target; // The next drop_of point the robot will move to.
+	path route; // The route that the robot will take to the target.
+	rgb aspect_color; // The color of the robot.
+	string name; // The name of the robot.
+	
+	// TODO: Rework this to be nicer.
 	bool flag <- false;
+	int last_edge; // Pointer to the last egde the robot has traveresd in the graph
+	point last; // The last node the robot has passed.
 
-	int last_edge; // pointer in the edge list
-	point last;
-
-	init{
-		// location <- any(drop_nodes);
-		// target <- any(drop_nodes);
-	}
+	init{}
 	
 	aspect base{
-		draw circle(2) color: _color;
+		draw circle(2) color: aspect_color;
 	}
 	
+	// Base reflex that drives the robot to move
 	reflex {
+		// For now only move between 0 and 3
 		if (route = nil or location = target){
 			if (target = (drop_nodes at 3)){
 				target <- (drop_nodes at 0);
 			}else{
 				target <- (drop_nodes at 3);
 			}
-			// target <- any(drop_nodes);
-			route <- path_between(mg, location, target); // this works
+			route <- path_between(mg, location, target);
 		}
 		
 		do follow path: route; // alternaively with move_weights: graph_weights;
 	}
 	
+	
+	// Reflex to log interesting information for debugging.
+	// The Setting of the last edge and location is also important
 	reflex log {
-		// Logs when ever a robot passes an edge
 		if (location in drop_nodes){
-			write name + " at:" + location;
+			// write name + " at:" + location;
 			last <- location;
 		}
 		
-		if current_edge = nil {return;} // Don't do the check in the case that we are on a ndoe and not an edge
-		last_edge <- mg.edges index_of(current_edge);
-
-		// int found <- mg.edges index_of(current_edge);
-		
-		// write name + " at:" + mg.edges index_of(current_edge);
-		// write string(current_edge) + ":" + string(mg.edges at found);
-		
-		// Update the weight and recal the path
-		// list<int> temp <- copy(w);
-		// temp[found] <- 500;
-		
-		
-		
-		// set temp at found <- 10;
-		
-//		if (location in movement_graph.edges){
-//			write name + " on edge at:" + location;
-//			last <- location;
-//		}
+		if (current_edge != nil){
+			last_edge <- mg.edges index_of(current_edge);
+		}
 	}
 	
+	// Reflex of the Robot to go back to the last edge it passed.
+	// TODO: Make this not rely on the flag since that is a bit hacky.
 	reflex go_back{
 		if (flag){
 			route <- path_between(mg, location, last); 
 		}
 		if(location = last and flag){
+			// If we reached the last node it is time to recalculate the path.
+			// Since we encountered an obstacle on last_edge we need to update its weight such that we don't take that edge.
 			
 			graph temp_graph <- copy(mg);
-			list<int> temp_weights <- copy(w);
+			list<int> temp_weights <- copy(edge_weights);
 			temp_weights[last_edge] <- 500;
 			
 			temp_graph <- with_weights (temp_graph, temp_weights);
 			route <- path_between(temp_graph, location, target);
-			flag <- false;
-			
-//			// TODO: This is where we recompute the path.
-//			write "1."+ weight_of(mg, mg.edges at 0);
-//			mg[mg.edges at 0] <- 500;
-//			mg[mg.edges at 1] <- 10;
-//			mg[mg.edges at 2] <- 10;
-//			mg[mg.edges at 3] <- 500;
-//			
-//			write "2."+ weight_of(mg, mg.edges at 0);
-//			mg <- with_weights (mg, [500, 10, 10, 500]);
-//			write "3."+ weight_of(mg, mg.edges at 0);
-//			route <- path_between(mg, location, target);
-//			flag <- false;
+			flag <- false;	
 		}
-	}
-	
-	reflex re_call{
-		
 	}
 }
 
@@ -149,15 +112,15 @@ experiment MyExperiment type: gui {
 	action my_action{
 		write #user_location; // Use this to get the mouse location
 		
-		// movement_graph <- with_weights (movement_graph, [500, 10, 10, 500]);
 		
+		
+		// Currently a POC this will be redone eventually.
+		// movement_graph <- with_weights (movement_graph, [500, 10, 10, 500]);
 		loop rob over: robot{
 			rob.flag <- true;
 			// rob.route  <- path_between(rob.mg, rob.location, rob.target);
 		}
-		
 	}
-	
 	
     output {
 		display MyDisplay /*type: 2d*/ {
