@@ -25,12 +25,25 @@ global {
 	    	movement_graph <- movement_graph add_node(nod);
 		}	
 		
+		// Add triage point
+		add point(50,50) to: triage_nodes;
+		
+		loop nod over: triage_nodes {
+	    	movement_graph <- movement_graph add_node(nod);
+		}
+		
 		// Add the connections between the nodes
+		// drop nodes to each other
 		movement_graph <- movement_graph add_edge(drop_nodes at 0::drop_nodes at 1);
 		movement_graph <- movement_graph add_edge(drop_nodes at 0::drop_nodes at 2);
 		movement_graph <- movement_graph add_edge(drop_nodes at 2::drop_nodes at 3);
 		movement_graph <- movement_graph add_edge(drop_nodes at 1::drop_nodes at 3);
 		movement_graph <- movement_graph add_edge(drop_nodes at 1::drop_nodes at 3);
+		// drop nodes to triage point
+		movement_graph <- movement_graph add_edge(drop_nodes at 0::triage_nodes at 0);
+		movement_graph <- movement_graph add_edge(drop_nodes at 1::triage_nodes at 0);
+		movement_graph <- movement_graph add_edge(drop_nodes at 2::triage_nodes at 0);
+		movement_graph <- movement_graph add_edge(drop_nodes at 3::triage_nodes at 0);
 		
 		// Calculate the weight based on the length of the edges so that the robot moves the same speed everywhere.
 		// movement_graph <- movement_graph with_weights (movement_graph.edges as_map (each:: geometry(each).perimeter));
@@ -38,13 +51,31 @@ global {
 			geometry(movement_graph.edges at 0).perimeter*0.5, // To make one robot faster than the other
 			geometry(movement_graph.edges at 1).perimeter*2,
 			geometry(movement_graph.edges at 2).perimeter*2,
-			geometry(movement_graph.edges at 3).perimeter
+			geometry(movement_graph.edges at 3).perimeter,
+			geometry(movement_graph.edges at 4).perimeter*3, // TODO to avoid going to the triage point for now
+			geometry(movement_graph.edges at 5).perimeter*3,
+			geometry(movement_graph.edges at 6).perimeter*3,
+			geometry(movement_graph.edges at 7).perimeter*3
 		];
 		movement_graph <-  with_weights (movement_graph, edge_weights);
 	
 		// Create the robots
-		create robot number: 1 with: (location: drop_nodes at 0, aspect_color: #green, target: drop_nodes at 3, mg: copy(movement_graph), name: "green");
-		create robot number: 1 with: (location: drop_nodes at 3, aspect_color: #red, target: drop_nodes at 0, mg: copy(movement_graph), name: "red");
+		create robot number: 1 with: (
+			location: drop_nodes at 0,
+			aspect_color: #green,
+			mg: copy(movement_graph),
+			name: "green",
+			pickup_list: [3,2],
+			dropoff_list: [0,1]
+		);
+		create robot number: 1 with: (
+			location: drop_nodes at 3,
+			aspect_color: #red,
+			mg: copy(movement_graph),
+			name: "red",
+			pickup_list: [0,1],
+			dropoff_list: [3,2]
+		);
     }
 }
 
@@ -52,22 +83,31 @@ global {
 species robot skills: [moving]{
 	graph mg; // The local copy of the graph that the robot has TODO: Think about this is still needed
 	
-	point target; // The next drop_of point the robot will move to.
+	point target; // The next point the robot will move to.
 	path route; // The route that the robot will take to the target.
+	
 	rgb aspect_color; // The color of the robot.
 	string name; // The name of the robot.
 	
 	// TODO: Rework this to be nicer.
 	bool flag <- false;
-	int last_edge; // Pointer to the last egde the robot has traveresd in the graph
+	int last_edge; // Pointer to the last edge the robot has traversed in the graph
 	point last; // The last node the robot has passed.
+	
+	// TODO robots need to 'order' the pickups given the earliest pickup/latest dropoff times
+	list<int> pickup_list;  // lists the remaining pickup locations
+	list<int> dropoff_list;  // lists the remaining dropoff locations 
+	bool has_crate <- false; // whether robot has crate (= is moving towards dropoff)
+	bool finished_deliveries <- false;
 	
 	geometry avoidrect;
 	
-	init{}
+	init{
+		last <- location;
+	}
 	
 	aspect base{
-		// draw circle(2) color: aspect_color;
+		draw circle(2) color: aspect_color;
 		// Draw the rect
 		// Avoidance rectangle
 		point r <- point(sin(heading+90), -cos(heading+90));
@@ -80,11 +120,36 @@ species robot skills: [moving]{
 	// Base reflex that drives the robot to move
 	reflex {
 		// For now only move between 0 and 3
-		if (route = nil or location = target){
-			if (target = (drop_nodes at 3)){
-				target <- (drop_nodes at 0);
+		if (not finished_deliveries and (route = nil or location = target)){ // arrived at location
+			if(has_crate or route = nil){
+				if(route != nil){
+					write name +" dropped of crate at:" + location;
+				}
+				// now check if another pickup exists
+				has_crate <- false;
+				if(length(pickup_list) > 0){
+					int index <- pickup_list at 0;
+					target <- (drop_nodes at index);  // set new target position from drop_nodes
+					remove from:pickup_list index:0; // pop from list pickup list
+					write name + " is moving to pickup crate at " + target + "(node " + index + ")";
+				}else{
+					write name + " finished delivering crates";
+					finished_deliveries <- true;
+					target <- (triage_nodes at 0); // for now, try to go to the triage point TODO figure out where robots should go after delivering everything (maybe their charging point?)
+				}
 			}else{
-				target <- (drop_nodes at 3);
+				// don't have a crate yet, so we arrived at a pickup point
+				write name + " pickup up crate at:" + location;
+				has_crate <- true;
+				if(length(dropoff_list) > 0){
+					int index <- dropoff_list at 0;  // set new target to be dropoff point
+					target <- (drop_nodes at index);
+					remove from:dropoff_list index:0;
+					write name + " is moving to drop off crate at " + target + "(node " + index + ")";
+				}else{
+					write name + " cannot find dropoff location; check if every pickup has a dropoff instruction";
+					target <- (triage_nodes at 0); // for now, try to go to the triage point TODO figure out where robots should go after delivering everything (maybe their charging point?)
+				}
 			}
 			route <- path_between(mg, location, target);
 		}
@@ -109,6 +174,7 @@ species robot skills: [moving]{
 	// Reflex of the Robot to go back to the last edge it passed.
 	// TODO: Make this not rely on the flag since that is a bit hacky.
 	reflex go_back{
+		//write name + " value of last: " + last;
 		if (flag){
 			route <- path_between(mg, location, last); 
 		}
@@ -143,8 +209,8 @@ species robot skills: [moving]{
 					// Found the overlapping
 					
 					float rob_distance <- distance_to(rob.location, rob.last);
-					float our_disrtance <- distance_to(self.location, self.last);
-					if(rob_distance < our_disrtance){
+					float our_distance <- distance_to(self.location, self.last);
+					if(rob_distance < our_distance){
 						write name+": other robot is shorter";
 						speed <- 0;
 					}else{
