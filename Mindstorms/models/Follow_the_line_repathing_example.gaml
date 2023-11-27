@@ -1,6 +1,8 @@
 model follow_the_line_warehouse
 
 global {
+	geometry shape <- rectangle(200#m,200#m);
+	
 	int sensor_range <- 20;
 	
 	// The graph that the robots move on.
@@ -11,26 +13,32 @@ global {
 	list<point> drop_nodes;
 	// The triage point.
 	list<point> triage_nodes;
+	// The recharge points.
+	list<point> recharge_nodes;
 	// The weights of the graph.
 	list<float> edge_weights <- [5, 10, 10, 5];
 	
     init {
     	// Add the points to the list and graph:
-		add point(10,10) to: drop_nodes;
-		add point(90,10) to: drop_nodes;
-		add point(10,90) to: drop_nodes;
-		add point(90,90) to: drop_nodes;
+		add point(50,50) to: drop_nodes;
+		add point(150,50) to: drop_nodes;
+		add point(50,150) to: drop_nodes;
+		add point(150,150) to: drop_nodes;
 		
 		loop nod over: drop_nodes {
 	    	movement_graph <- movement_graph add_node(nod);
 		}	
 		
 		// Add triage point
-		add point(50,50) to: triage_nodes;
+		add point(100,100) to: triage_nodes;
 		
 		loop nod over: triage_nodes {
 	    	movement_graph <- movement_graph add_node(nod);
 		}
+		
+		// Add recharge points (one per robot!)
+		add point(25,25) to: recharge_nodes;
+		add point(175,175) to: recharge_nodes;
 		
 		// Add the connections between the nodes
 		// drop nodes to each other
@@ -44,6 +52,9 @@ global {
 		movement_graph <- movement_graph add_edge(drop_nodes at 1::triage_nodes at 0);
 		movement_graph <- movement_graph add_edge(drop_nodes at 2::triage_nodes at 0);
 		movement_graph <- movement_graph add_edge(drop_nodes at 3::triage_nodes at 0);
+		// drop nodes to recharge points
+		movement_graph <- movement_graph add_edge(drop_nodes at 0::recharge_nodes at 0);
+		movement_graph <- movement_graph add_edge(drop_nodes at 3::recharge_nodes at 1);
 		
 		// Calculate the weight based on the length of the edges so that the robot moves the same speed everywhere.
 		// movement_graph <- movement_graph with_weights (movement_graph.edges as_map (each:: geometry(each).perimeter));
@@ -55,13 +66,15 @@ global {
 			geometry(movement_graph.edges at 4).perimeter*3, // TODO to avoid going to the triage point for now
 			geometry(movement_graph.edges at 5).perimeter*3,
 			geometry(movement_graph.edges at 6).perimeter*3,
-			geometry(movement_graph.edges at 7).perimeter*3
+			geometry(movement_graph.edges at 7).perimeter*3,
+			geometry(movement_graph.edges at 8).perimeter,
+			geometry(movement_graph.edges at 9).perimeter
 		];
 		movement_graph <-  with_weights (movement_graph, edge_weights);
 	
 		// Create the robots
 		create robot number: 1 with: (
-			location: drop_nodes at 0,
+			location: recharge_nodes at 0,
 			aspect_color: #green,
 			mg: copy(movement_graph),
 			name: "green",
@@ -69,7 +82,7 @@ global {
 			dropoff_list: [0,1]
 		);
 		create robot number: 1 with: (
-			location: drop_nodes at 3,
+			location: recharge_nodes at 1,
 			aspect_color: #red,
 			mg: copy(movement_graph),
 			name: "red",
@@ -102,8 +115,15 @@ species robot skills: [moving]{
 	
 	geometry avoidrect;
 	
+	point recharge_point;
+	bool going_charging <- false;
+	bool is_charging <- false;
+	int charge_timer <- 100; // how long to charge for
+	int charge_timer_default <- 100;
+	 
 	init{
 		last <- location;
+		recharge_point <- location; // TODO we now assume all robots start at their recharge points
 	}
 	
 	aspect base{
@@ -117,10 +137,36 @@ species robot skills: [moving]{
 		draw image("robot.png") size: {10, 15} rotate: (heading-90);
 	}
 	
+	reflex {
+		if(going_charging and location=target){ // arrived at charging station
+			write name + " arrived at the charging station. Initiating charge sequence";
+			going_charging <- false;
+			is_charging<- true;
+		}
+	}
+	
+	reflex {
+		if(is_charging){
+			charge_timer <- charge_timer - 1;
+			if(charge_timer = 10){
+				write name + " almost finished charging, only ten more minutes!";
+				// TODO notify
+			}
+			if(charge_timer = 0){
+				write name + " finished charging! Ready for action";
+				is_charging <- false;
+				charge_timer <- charge_timer_default;
+			}
+		}
+	}
+	
 	// Base reflex that drives the robot to move
 	reflex {
-		// For now only move between 0 and 3
-		if (not finished_deliveries and (route = nil or location = target)){ // arrived at location
+		if(is_charging){
+			return; // TODO prettify this
+		}
+		// TODO prettify/split up this reflex
+		if (not finished_deliveries and not going_charging and (route = nil or location = target)){ // arrived at location
 			if(has_crate or route = nil){
 				if(route != nil){
 					write name +" dropped of crate at:" + location;
@@ -135,7 +181,7 @@ species robot skills: [moving]{
 				}else{
 					write name + " finished delivering crates";
 					finished_deliveries <- true;
-					target <- (triage_nodes at 0); // for now, try to go to the triage point TODO figure out where robots should go after delivering everything (maybe their charging point?)
+					target <- recharge_point; // when done, go to personal recharge point
 				}
 			}else{
 				// don't have a crate yet, so we arrived at a pickup point
@@ -148,10 +194,11 @@ species robot skills: [moving]{
 					write name + " is moving to drop off crate at " + target + "(node " + index + ")";
 				}else{
 					write name + " cannot find dropoff location; check if every pickup has a dropoff instruction";
-					target <- (triage_nodes at 0); // for now, try to go to the triage point TODO figure out where robots should go after delivering everything (maybe their charging point?)
+					target <- recharge_point; // when done, go to personal recharge point
 				}
 			}
 			route <- path_between(mg, location, target);
+			//write name + "follows route: " + route;
 		}
 		
 		do follow path: route; // alternaively with move_weights: graph_weights;
@@ -161,11 +208,12 @@ species robot skills: [moving]{
 	// Reflex to log interesting information for debugging.
 	// The Setting of the last edge and location is also important
 	reflex log {
-		if (location in drop_nodes){
-			// write name + " at:" + location;
+		point int_loc_fl <- point({floor(location.x), floor(location.y)});
+		point int_loc_cl <- point({ceil(location.x), ceil(location.y)});
+		if (int_loc_fl in drop_nodes or int_loc_cl in drop_nodes){  // TODO fix the fact that this is not always 100% accurate; currently uses rounded locations to check position
+			write name + " int loc at:" + location;
 			last <- location;
-		}
-		
+		}		
 		if (current_edge != nil){
 			last_edge <- mg.edges index_of(current_edge);
 		}
@@ -227,10 +275,18 @@ species robot skills: [moving]{
 	
 	user_command "Send Battery Warning" action: battery_warning;
 	action battery_warning {
-		write name+": Battery is low."; // TODO: Put some logic behind this
+		write name+": Battery is low.";
+		// TODO communicate remaining orders back to central location
+		has_crate <- false;
+		dropoff_list <- ([]);
+		pickup_list<- ([]);
+		
+		target <- recharge_point; // when done, go to personal recharge point
+		route <- path_between(mg, location, target);
+		going_charging <- true;
+
 	}
 }
-
 
 species obstacle {
 	geometry geo <- square(4);
@@ -289,6 +345,10 @@ experiment MyExperiment type: gui {
 				loop nod over: triage_nodes {
 			    	draw circle(3) at: nod color: #red;
 			    	draw "Triage point" at: nod color: #black;
+				}
+				loop nod over: recharge_nodes {
+					draw circle(3) at: nod color: #turquoise;
+			    	draw "recharge point" at: nod color: #black;
 				}
 		    	
 				loop edges over: movement_graph.edges {
