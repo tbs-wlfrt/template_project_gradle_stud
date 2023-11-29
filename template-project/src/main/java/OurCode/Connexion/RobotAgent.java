@@ -9,6 +9,7 @@ import jade.core.behaviours.*;
 import jade.lang.acl.ACLMessage;
 import lejos.robotics.SampleProvider;
 import lejos.utility.Delay;
+import org.antlr.works.debugger.events.DBEventLocation;
 
 import static jade.lang.acl.ACLMessage.INFORM;
 
@@ -24,6 +25,11 @@ public class RobotAgent extends Agent {
     PIDController distancePID = new PIDController(50);
     int speedMultiplier = 40;
     int motorsFullSpeed = 150;
+
+    int junctionColor = 5;      //red
+    Boolean atJunction = false;
+
+
 
     String mission_type = ""; // the mission the agent has to complete
 
@@ -48,12 +54,13 @@ public class RobotAgent extends Agent {
 
     protected void setup() {
 
-        //BEHAVIOURS (for our scenarios):
-        //PID for following (cyclic behaviour for checking distance and updating speed)
-        //follow predefined path (one shot behaviour for just following a hardcoded set of instructions)
+        addBehaviour(follow_line_routine);
+        /*
         SequentialBehaviour go = new SequentialBehaviour();
         addBehaviour(go);
         go.addSubBehaviour(follow_line_routine);
+         */
+
         //addBehaviour(obstacle_check);
         //addBehaviour(init_message);
         //   addBehaviour(lowBattery);
@@ -62,31 +69,11 @@ public class RobotAgent extends Agent {
         //  addBehaviour(tck);
         //    addBehaviour(turn_left);
     }
-    CyclicBehaviour check_colour = new CyclicBehaviour() {
-        @Override
-        public void action() {
-            Delay.msDelay(100);
-            int colour = 1;
-            System.out.println("Colour: " + colour);
-
-
-
-            int distance = Device.sampleFrontDistance();
-            System.out.println("Speed: " + distance);
-
-            distancePID.updateVals(distance);
-            int speed = (int) Math.min(distancePID.recalibrate()*speedMultiplier, 1000);
-            System.out.println("speed: " + speed);
-
-            //System.out.println("Speed: " + speed);
-            Device.setMotorSpeeds(speed, speed);
-            Device.startMoveForward();
-        }
-    };
 
     CyclicBehaviour pid_follower_routine = new CyclicBehaviour() {
         @Override
         public void action() {
+            //TODO: modify and test so that motorspeeds arent changed, but motorsFullSpeed is (so that line follower PID works at the same time).
             Delay.msDelay(100);
             int distance = Device.sampleFrontDistance();
             System.out.println("Speed: " + distance);
@@ -102,7 +89,7 @@ public class RobotAgent extends Agent {
     };
 
 
-    CyclicBehaviour follow_line_routine = new CyclicBehaviour() {
+    OneShotBehaviour follow_line_routine = new OneShotBehaviour() {
         @Override
         public void action() {
             Delay.msDelay(50);
@@ -121,6 +108,63 @@ public class RobotAgent extends Agent {
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        }
+
+        @Override
+        public int onEnd() {
+            if (!atJunction)
+                addBehaviour(follow_line_routine);
+            else
+                addBehaviour(rotate_to_exit);
+            return super.onEnd();
+        }
+    };
+
+
+    //checks if the robot is currently over a junction (with either of the color sensors)
+    TickerBehaviour check_junction = new TickerBehaviour(this, 100) {
+        @Override
+        protected void onTick() {
+            /*
+            steps:
+            1) sample both colour sensors, check if colour is junctionColour
+            2) if front sensor reads junctionColour, set both motors to same speed and go forward.
+            3) if back sensor read junctionColour, stop, and set atJunction to true.
+             */
+
+            //TODO: add code for checking with front sensor.
+            //behaviour for if back sensor reads junctionColor
+            int sampledColor = Device.sampleBackColor();
+            System.out.println("Sampled colour: " + sampledColor);
+            if (sampledColor == junctionColor){
+                Device.stop();
+                atJunction = true;
+            }
+
+        }
+    };
+
+    //behaviour used when the robot is currently at a junction (node) and needs to turn to its exit
+    OneShotBehaviour rotate_to_exit = new OneShotBehaviour() {
+        @Override
+        public void action() {
+            Device.stop();
+            //TODO: update so that robot turns left or right according to next desired node.
+            //if next exit is left, rotate left until front sensor reads black
+            float lightIntensity = 100;
+            Device.turnLeftInPlace(500);
+            while (lightIntensity > colorPID.getSetPoint()){
+                Device.turnLeftInPlace(200);
+                lightIntensity = Device.sampleLightIntensity();
+            }
+
+        }
+
+        public int onEnd() {
+            atJunction = false;
+            addBehaviour(follow_line_routine);
+            //TODO: insert section that makes sure we dont think we are at a different junction becasue we havent moved
+            return super.onEnd();
         }
     };
 

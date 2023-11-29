@@ -86,8 +86,8 @@ public class ColorPIDController {
         val = currDistance;
     }
 
-
-
-    //need method for: updating values, outputting new values
+    public int getSetPoint(){
+        return setPoint;
+    }
 
 }

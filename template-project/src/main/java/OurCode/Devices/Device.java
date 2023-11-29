@@ -17,14 +17,17 @@ public class Device {
 
     // The declaration of the ultrasonic sensor.
     static EV3UltrasonicSensor ultrasonicSensor;
-    static EV3ColorSensor colorSensor;
+    static EV3ColorSensor frontColorSensor;
+    static EV3ColorSensor backColorSensor;
+
 
     static int sleepIntervalInMilliSeconds = 5;
 
     //sample providers
     static SampleProvider ultrasonicSP;
-    static SampleProvider colorSP;
-    static SampleProvider colorMax;
+    static SampleProvider frontColorSP;
+    static SampleProvider frontColorMax;
+    static SampleProvider backColorSP;
 
 
 
@@ -37,12 +40,16 @@ public class Device {
         motor2 = new EV3MediumRegulatedMotor(MotorPort.C); // right
 
         ultrasonicSensor = new EV3UltrasonicSensor(SensorPort.S3);
-        colorSensor = new EV3ColorSensor(SensorPort.S1);
+        frontColorSensor = new EV3ColorSensor(SensorPort.S1);
+        backColorSensor = new EV3ColorSensor(SensorPort.S2);
+
 
         ultrasonicSP = ultrasonicSensor.getDistanceMode();
 
-        colorSP = colorSensor.getRGBMode();
-        colorMax = new MaximumFilter(colorSP, 5);
+        frontColorSP = frontColorSensor.getRGBMode();
+        frontColorMax = new MaximumFilter(frontColorSP, 5);
+
+        backColorSP = backColorSensor.getColorIDMode();
 
 
         Delay.msDelay(1000); // Wait for the sensors to initialise.
@@ -186,8 +193,8 @@ public class Device {
      * @return current light intensity reading from the sensor.
      */
     public static float sampleLightIntensity(){
-        float[] sample = new float[colorSP.sampleSize()];
-        colorMax.fetchSample(sample, 0);
+        float[] sample = new float[frontColorSP.sampleSize()];
+        frontColorMax.fetchSample(sample, 0);
 
         //float[] vals = new float[2];
         return sample[0];
@@ -195,15 +202,18 @@ public class Device {
 
 
     /**
-     * Sample the light sensor and return intensity reading.
-     * @return current light intensity reading from the sensor.
+     * Sample the back color sensor and returns the ID of the current color.
+     * @return current color ID reading from the sensor.
      */
-    public static float sampleColor(){
-        float[] sample = new float[colorSP.sampleSize()];
-        colorMax.fetchSample(sample, 0);
-
-        //float[] vals = new float[2];
-        return sample[0];
+    public static int sampleBackColor(){
+        float[] backSample = new float[backColorSP.sampleSize()];
+        backColorSP.fetchSample(backSample, 0);
+        /*
+        float[] vals = new float[2];
+        vals[0] = frontSample[0];
+        vals[1] = backSample[0];
+         */
+        return (int) backSample[0];
     }
 
     /**
