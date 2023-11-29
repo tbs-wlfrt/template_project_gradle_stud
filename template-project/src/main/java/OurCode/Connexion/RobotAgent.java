@@ -21,7 +21,7 @@ public class RobotAgent extends Agent {
     int obstacleDistanceThreshold = 25; // the maximum acceptable distance required between the agent and the obstacle
     boolean onMission = false;
 
-    ColorPIDController colorPID = new ColorPIDController(33);
+    ColorPIDController colorPID = new ColorPIDController(50);
     PIDController distancePID = new PIDController(50);
     int speedMultiplier = 40;
     int motorsFullSpeed = 150;
@@ -53,8 +53,13 @@ public class RobotAgent extends Agent {
     //static int ultrasonic_right = 0;
 
     protected void setup() {
-
+        // make a cyclyc behavior
         addBehaviour(follow_line_routine);
+
+
+
+        //addBehaviour(follow_line_routine);
+        //addBehaviour(check_junction);
         /*
         SequentialBehaviour go = new SequentialBehaviour();
         addBehaviour(go);
@@ -92,7 +97,8 @@ public class RobotAgent extends Agent {
     OneShotBehaviour follow_line_routine = new OneShotBehaviour() {
         @Override
         public void action() {
-            Delay.msDelay(50);
+            System.out.println("Starting behaviour: follow_line_routine");
+            Delay.msDelay(100);
             //PID controlled line following behaviour
             try {
                 //get light sensor reading from device
@@ -118,6 +124,7 @@ public class RobotAgent extends Agent {
                 addBehaviour(rotate_to_exit);
             return super.onEnd();
         }
+
     };
 
 
@@ -145,19 +152,23 @@ public class RobotAgent extends Agent {
     };
 
     //behaviour used when the robot is currently at a junction (node) and needs to turn to its exit
-    OneShotBehaviour rotate_to_exit = new OneShotBehaviour() {
+        OneShotBehaviour rotate_to_exit = new OneShotBehaviour() {
         @Override
         public void action() {
             Device.stop();
             //TODO: update so that robot turns left or right according to next desired node.
             //if next exit is left, rotate left until front sensor reads black
             float lightIntensity = 100;
-            Device.turnLeftInPlace(500);
-            while (lightIntensity > colorPID.getSetPoint()){
-                Device.turnLeftInPlace(200);
+            Device.turnLeftInPlace(100);
+            Device.startTurnLeft(motorsFullSpeed/4);
+            // check if it's between full black and set point
+            while (!(colorPID.fullBlack <= lightIntensity && lightIntensity <= colorPID.setPoint) ){
+                //Device.turnLeftInPlace(100);
+                Device.sync(20);
                 lightIntensity = Device.sampleLightIntensity();
+                System.out.println(lightIntensity);
             }
-
+            Device.stop();
         }
 
         public int onEnd() {

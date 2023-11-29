@@ -122,6 +122,16 @@ public class Device {
     }
 
     /**
+     * Move the robot backwards indefinitely.
+     */
+    public static void startTurnLeft(int speed){
+        motor1.setSpeed(speed);
+        motor2.setSpeed(speed);
+        motor1.forward(); sync();
+        motor2.backward(); sync();
+    }
+
+    /**
      * Move the robot forward for *time* duration.
      * @param time The duration in ms to move for.
      */
