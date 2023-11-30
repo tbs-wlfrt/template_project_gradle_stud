@@ -8,8 +8,19 @@ public class ColorPIDController_copy {
     public int fullBlack = 5;           // Lower bound for the sensor reading all black
     public int fullWhite = 500;         // Upper bound for the sensor reading all white
 
+    /* it seems the robot is not sensitive enough when it strays away from the line and doesnt go back more enough and fast enough
+     to change this we need to adjust the kp, ki, and kd values, more specifically the kp value because it is the one that is
+     responsible for the proportional part of the PID controller. The ki and kd values are responsible for the integral and
+        derivative parts of the PID controller respectively. The kp value is the one that is responsible for the proportionality
+        this means:
+        kp: is the sensitivity to the current error
+        ki: is the sensitivity to the past error
+        kd: is the sensitivity to the future error
+        if it's not sensitive enough to react to the fact that it strayed from the setPoint we need to change the kp value
+        to a higher value so that it reacts more to the current error
+    */
     // Sensitivity to the current measurement
-    double kp = 0.4; // 3.60F; // 1.6F; // try 1.6
+    double kp = 0.65; // 3.60F; // 1.6F; // try 1.6
     double ki = 0.00001F;
     double kd = 3.2; // 20.2F; // 3.2F;
 
@@ -71,6 +82,12 @@ public class ColorPIDController_copy {
         if (output2 < 0)
             output2 = output2 * -1;
 
+        // Adjust speed based on background color
+        if (val >= fullBlack && val <= setPoint) {
+            output1 *= 1.2;
+            output2 *= 1.2;
+        }
+
         return new int[]{output1, output2};
     }
 
@@ -79,6 +96,12 @@ public class ColorPIDController_copy {
         val = currDistance;
     }
 
+    public void resetValsOnTurn(){
+        lastError1 = 0;
+        lastError2 = 0;
+        cumError1 = 0;
+        cumError2 = 0;
+    }
     public int getSetPoint() {
         return setPoint;
     }

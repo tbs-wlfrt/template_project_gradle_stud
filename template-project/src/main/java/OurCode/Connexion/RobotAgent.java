@@ -2,6 +2,7 @@ package OurCode.Connexion;
 
 import OurCode.Devices.Device;
 import OurCode.Helpers.ColorPIDController;
+import OurCode.Helpers.ColorPIDController_copy;
 import OurCode.Helpers.PIDController;
 import jade.core.AID;
 import jade.core.Agent;
@@ -21,7 +22,7 @@ public class RobotAgent extends Agent {
     int obstacleDistanceThreshold = 25; // the maximum acceptable distance required between the agent and the obstacle
     boolean onMission = false;
 
-    ColorPIDController colorPID = new ColorPIDController(50);
+    ColorPIDController_copy colorPID = new ColorPIDController_copy(50);
     PIDController distancePID = new PIDController(50);
     int speedMultiplier = 40;
     int motorsFullSpeed = 150;
@@ -74,6 +75,13 @@ public class RobotAgent extends Agent {
         //  addBehaviour(tck);
         //    addBehaviour(turn_left);
     }
+    // oneshot move forward behavior
+    OneShotBehaviour move_forward = new OneShotBehaviour() {
+        @Override
+        public void action() {
+            Device.moveForward(100);
+        }
+    };
 
     CyclicBehaviour pid_follower_routine = new CyclicBehaviour() {
         @Override
@@ -101,16 +109,19 @@ public class RobotAgent extends Agent {
             Delay.msDelay(100);
             //PID controlled line following behaviour
             try {
-                //get light sensor reading from device
-                float sample = Device.sampleLightIntensity();
-                Device.sync(20);
-                //controller.updateVal(sample);
-                int[] motorSpeedsReduction = colorPID.recalibrate(sample);
-                System.out.println("\nGOT: " + sample + "" + "\nMotorspeeds:" + motorSpeedsReduction[0] + ", " + motorSpeedsReduction[1]);
-                //set device motor speeds to new values calculated by PID controller
-                Device.setMotorSpeeds(motorsFullSpeed-motorSpeedsReduction[0], motorsFullSpeed-motorSpeedsReduction[1]);
-                Device.startMoveForward();
-
+                // detect if robot is at a junction
+                atJunction = Device.sampleBackColor() == junctionColor;
+                if(!atJunction){
+                    //get light sensor reading from device
+                    float sample = Device.sampleLightIntensity();
+                    Device.sync(20);
+                    //controller.updateVal(sample);
+                    int[] motorSpeedsReduction = colorPID.recalibrate(sample);
+                    System.out.println("\nGOT: " + sample + "" + "\nMotorspeeds:" + motorSpeedsReduction[0] + ", " + motorSpeedsReduction[1]);
+                    //set device motor speeds to new values calculated by PID controller
+                    Device.setMotorSpeeds(motorsFullSpeed-motorSpeedsReduction[0], motorsFullSpeed-motorSpeedsReduction[1]);
+                    Device.startMoveForward();
+                }
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -155,24 +166,29 @@ public class RobotAgent extends Agent {
         OneShotBehaviour rotate_to_exit = new OneShotBehaviour() {
         @Override
         public void action() {
+            // Keeps turning incrementally until the front sensor reads black
+            System.out.println("Starting behaviour: rotate_to_exit");
             Device.stop();
             //TODO: update so that robot turns left or right according to next desired node.
             //if next exit is left, rotate left until front sensor reads black
             float lightIntensity = 100;
-            Device.turnLeftInPlace(100);
+            Device.turnLeftInPlace(60); // defines the speed of the turn
             Device.startTurnLeft(motorsFullSpeed/4);
             // check if it's between full black and set point
-            while (!(colorPID.fullBlack <= lightIntensity && lightIntensity <= colorPID.setPoint) ){
+            while (!(colorPID.fullBlack <= lightIntensity && lightIntensity < (colorPID.setPoint+5))){
                 //Device.turnLeftInPlace(100);
                 Device.sync(20);
                 lightIntensity = Device.sampleLightIntensity();
                 System.out.println(lightIntensity);
             }
             Device.stop();
+            // reset the values for the colorPID
+            colorPID.resetValsOnTurn();
         }
 
         public int onEnd() {
             atJunction = false;
+            addBehaviour(go_forward);
             addBehaviour(follow_line_routine);
             //TODO: insert section that makes sure we dont think we are at a different junction becasue we havent moved
             return super.onEnd();
@@ -259,19 +275,19 @@ public class RobotAgent extends Agent {
         }
     };
      */
-    /*
     //behaviours for robot movement - too fine grained?
     OneShotBehaviour go_forward = new OneShotBehaviour() {
         @Override
         public void action() {
             try {
-                Device.moveForward(500);
+                Device.moveForward(2000);
                 System.out.println("Forward");
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
     };
+    /*
 
     OneShotBehaviour go_backward = new OneShotBehaviour() {
         @Override
