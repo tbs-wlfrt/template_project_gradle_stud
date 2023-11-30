@@ -19,6 +19,8 @@ global {
 	// The weights of the graph.
 	list<float> edge_weights <- [5, 10, 10, 5];
 	
+	list<list<int>> tasks <- [[3,0], [0,3]];
+	
     init {
     	// Add the points to the list and graph:
 		add point(50,50) to: drop_nodes;
@@ -78,18 +80,20 @@ global {
 			location: recharge_nodes at 0,
 			aspect_color: #green,
 			mg: copy(movement_graph),
-			name: "green",
-			pickup_list: [3,2],
-			dropoff_list: [0,1]
+			name: "green"
+			// pickup_list: [3,2],
+			// dropoff_list: [0,1]
 		);
 		create robot number: 1 with: (
 			location: recharge_nodes at 1,
 			aspect_color: #red,
 			mg: copy(movement_graph),
-			name: "red",
-			pickup_list: [0,1],
-			dropoff_list: [3,2]
+			name: "red"
+			// pickup_list: [0,1],
+			// dropoff_list: [3,2]
 		);
+		
+		create controller with: (tasks: tasks);
     }
 }
 
@@ -112,7 +116,7 @@ species robot skills: [moving]{
 	list<int> pickup_list;  // lists the remaining pickup locations
 	list<int> dropoff_list;  // lists the remaining dropoff locations 
 	bool has_crate <- true; // whether robot has crate (= is moving towards dropoff); init at true to get first pickup location
-	bool finished_deliveries <- false;
+	bool finished_deliveries <- true;
 	
 	geometry avoidrect;
 	
@@ -168,6 +172,16 @@ species robot skills: [moving]{
 			// now check if another pickup exists
 			has_crate <- false;
 			if(battery_low){
+				
+				// TODO: Figure out where thid goes, this crashes ATM
+				list<list<int>> redistribute_tasks;
+				loop i from: 0 to: length(pickup_list){
+					redistribute_tasks <- redistribute_tasks + [[pickup_list[i], dropoff_list[i]]];  
+				}
+				ask controller {
+					do add_tasks(redistribute_tasks);
+				}
+				
 				// TODO send back to controller
 				dropoff_list <- ([]);
 				pickup_list<- ([]);
@@ -185,7 +199,9 @@ species robot skills: [moving]{
 			}else{
 				write name + " finished delivering crates";
 				finished_deliveries <- true;
-				target <- recharge_point; // when done, go to personal recharge point
+				target <- recharge_point; // when done, go to personal recharge point				
+
+				// TODO add the controller code here
 			}
 		}else{
 			// don't have a crate yet, so we arrived at a pickup point
@@ -209,7 +225,14 @@ species robot skills: [moving]{
 		}
 		route <- path_between(mg, location, target);
 		//write name + "follows route: " + route;
+		
+		
+		ask controller {
+			do divide_tasks;
+		}
 	}
+	
+	// reflex gg when:
 	
 	reflex advance when: route != nil and not is_charging{
 		do follow path: route; // alternaively with move_weights: graph_weights;
@@ -286,30 +309,109 @@ species robot skills: [moving]{
 		// TODO communicate remaining orders back to central location
 		battery_low <- true;
 	}
+	
+	action start{
+		finished_deliveries <- false;
+		has_crate <- false;
+		target <- nil;
+		route <- nil;
+	}
+		
+	action tasks(list l1, list l2) {
+		
+		pickup_list <- l1;
+		dropoff_list <- l2;
+//		pickup_list <- [3,2];
+//		dropoff_list <- [0,1];
+		
+		// Needed to get the robot back to the base bahvaiour
+		finished_deliveries <- false;
+		has_crate <- false;
+		target <- nil;
+		route <- nil;
+	}
 }
 
 species obstacle {
 	geometry geo <- square(4);
-	bool should_die <- false;
 	
 	aspect base{
 		draw geo color: #brown;
 	}
+}
+
+species controller {
+	list<list<int>> tasks; // list of [pickup, drop_off]
+	// map<string, list<list<int>>> tasks_per_robot;
 	
-	reflex{ if should_die { do die; }}
+	init{
+		location <- (10,10);
+		write tasks;
+		do divide_tasks;
+	}
+	
+	user_command "Add task" action: t;
+	action t {
+		tasks <- tasks + [[rnd(length(drop_nodes)-1), rnd(length(drop_nodes)-1)]];
+		write "Task added: " + tasks;
+		
+		// could be that this doesn't work
+		do divide_tasks;
+	}
+	
+	user_command "Give tasks" action: divide_tasks;
+	action divide_tasks {
+		int i <- 0;
+		list<robot> free_robots;
+		
+		loop rob over: robot {
+			if rob.finished_deliveries {
+				free_robots <- free_robots + [rob];
+			}
+		}
+		write free_robots;
+		write tasks;
+		
+		int l <- length(free_robots);
+		if (l = 0){ return; }
+		
+		loop task over: tasks {
+			robot cur <- free_robots[i];
+			
+			// TODO: Be smarter about this
+			if cur.finished_deliveries {
+				ask cur {
+					pickup_list <- pickup_list + task[0];
+					dropoff_list <- dropoff_list + task[1];
+				}
+			}	
+			i <- (i + 1) mod l;
+		}
+		
+		if(length(tasks) = 0){ return; } // This is necessary so that the robot returns to the charging station if there is nothig new.
+		ask free_robots{
+			do start;
+		}
+		
+		// Clear all the distriubted tasks
+		
+		tasks <- [];
+	}
+	
+	action add_tasks(list<list<int>> new_tasks){
+		tasks <- tasks + new_tasks;
+		do divide_tasks;
+	}
+	
+	
+	aspect base 
+	{
+		draw rectangle(40,5) color: #black;
+		draw "Controller" color: #white;
+	}
 }
 
 experiment MyExperiment type: gui {
-	action my_action{
-		write #user_location; // Use this to get the mouse location
-		
-		// Currently a POC this will be redone eventually.
-		// movement_graph <- with_weights (movement_graph, [500, 10, 10, 500]);
-		loop rob over: robot{
-			rob.flag <- true;
-			// rob.route  <- path_between(rob.mg, rob.location, rob.target);
-		}
-	}
 	
 	action place_obstacle {
 		// Create a new obstacle on the location the user clicked.	
@@ -320,19 +422,20 @@ experiment MyExperiment type: gui {
 	
 	// Remove all the obstacles
 	action clean_obstacles{	
-		loop ob over: obstacle {
-			ob.should_die <- true;
+		ask obstacle  {
+			do die;
 		}
 	}
 	
 	user_command "Clear all Obstacles" action: clean_obstacles category:"Obstacles";
 	parameter "Sensor Range" var: sensor_range;
 	parameter "Rotting Chance (int%)" var: rotting_chance;
+	parameter "Tasks" var: tasks;
 	// TODO: Add parameters for evrything and this should work.
 	
     output {
 		display MyDisplay /*type: 2d*/ {
-			event mouse_down action: my_action;
+//			event mouse_down action: my_action;
 			event 'o' action: place_obstacle; // place an obstacle if the o key is pressed.
 			
 			// TODO: Find a better way to draw this
@@ -340,9 +443,11 @@ experiment MyExperiment type: gui {
 		    	loop nod over: nodes {
 			    	draw circle(1) at: nod color: #black;
 				}
+				int i <- 0;
 				loop nod over: drop_nodes {
 			    	draw circle(3) at: nod color: #yellow;
-			    	draw "Drop point" at: nod color: #black;
+			    	draw "Drop point: " + i at: nod color: #black;
+			    	i <- i + 1;
 				}
 				loop nod over: triage_nodes {
 			    	draw circle(3) at: nod color: #red;
@@ -359,6 +464,7 @@ experiment MyExperiment type: gui {
 		    }
 		    species obstacle aspect: base;
 		    species robot aspect: base;
+		   	species controller aspect: base;
 		}
     }
 }
