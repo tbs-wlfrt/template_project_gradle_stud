@@ -55,7 +55,7 @@ public class RobotAgent extends Agent {
 
     protected void setup() {
         // make a cyclyc behavior
-        addBehaviour(follow_line_routine);
+        addBehaviour(follow_line_routine_right);
 
 
 
@@ -138,6 +138,42 @@ public class RobotAgent extends Agent {
 
     };
 
+    OneShotBehaviour follow_line_routine_right = new OneShotBehaviour() {
+        @Override
+        public void action() {
+            System.out.println("Starting behaviour: follow_line_routine");
+            Delay.msDelay(100);
+            //PID controlled line following behaviour
+            try {
+                // detect if robot is at a junction
+                atJunction = Device.sampleBackColor() == junctionColor;
+                if(!atJunction){
+                    //get light sensor reading from device
+                    float sample = Device.sampleLightIntensity();
+                    Device.sync(20);
+                    //controller.updateVal(sample);
+                    int[] motorSpeedsReduction = colorPID.recalibrate(sample);
+                    System.out.println("\nGOT: " + sample + "" + "\nMotorspeeds:" + motorSpeedsReduction[0] + ", " + motorSpeedsReduction[1]);
+                    //set device motor speeds to new values calculated by PID controller
+                    Device.setMotorSpeeds(motorsFullSpeed-motorSpeedsReduction[0], motorsFullSpeed-motorSpeedsReduction[1]);
+                    Device.startMoveForward();
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        @Override
+        public int onEnd() {
+            if (!atJunction)
+                addBehaviour(follow_line_routine_right);
+            else
+                addBehaviour(rotate_right_to_exit);
+            return super.onEnd();
+        }
+
+    };
+
 
     //checks if the robot is currently over a junction (with either of the color sensors)
     TickerBehaviour check_junction = new TickerBehaviour(this, 100) {
@@ -163,7 +199,7 @@ public class RobotAgent extends Agent {
     };
 
     //behaviour used when the robot is currently at a junction (node) and needs to turn to its exit
-        OneShotBehaviour rotate_to_exit = new OneShotBehaviour() {
+    OneShotBehaviour rotate_to_exit = new OneShotBehaviour() {
         @Override
         public void action() {
             // Keeps turning incrementally until the front sensor reads black
@@ -195,6 +231,44 @@ public class RobotAgent extends Agent {
         }
     };
 
+    //behaviour used when the robot is currently at a junction (node) and needs to turn to its exit
+    OneShotBehaviour rotate_right_to_exit = new OneShotBehaviour() {
+        @Override
+        public void action() {
+            // Keeps turning incrementally until the front sensor reads black
+            System.out.println("Starting behaviour: rotate_to_exit");
+            Device.stop();
+            //TODO: update so that robot turns left or right according to next desired node.
+            //if next exit is left, rotate left until front sensor reads black
+            float lightIntensity = 100;
+            Device.turnRightInPlace(60); // defines the speed of the turn
+            Device.startTurnRight(motorsFullSpeed/4);
+            // check if it's between full black and set point
+            while (!(colorPID.fullBlack <= lightIntensity && lightIntensity < (colorPID.setPoint+5))){
+                //Device.turnLeftInPlace(100);
+                Device.sync(20);
+                lightIntensity = Device.sampleLightIntensity();
+                System.out.println(lightIntensity);
+            }
+            Device.stop();
+
+            // rotate a little bit to left to make sure we are on the line
+            Device.turnLeftInPlace(60);
+            Device.startTurnRight(motorsFullSpeed/4);
+            Delay.msDelay(500);
+            Device.stop();
+            // reset the values for the colorPID
+            colorPID.resetValsOnTurn();
+        }
+
+        public int onEnd() {
+            atJunction = false;
+            addBehaviour(go_forward);
+            addBehaviour(follow_line_routine_right);
+            //TODO: insert section that makes sure we dont think we are at a different junction becasue we havent moved
+            return super.onEnd();
+        }
+    };
 
     /*
         BEHAVIOUR DEFINITIONS
