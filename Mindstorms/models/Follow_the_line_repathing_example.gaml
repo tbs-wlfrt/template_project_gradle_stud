@@ -121,20 +121,12 @@ species robot skills: [moving]{
 	rgb aspect_color; // The color of the robot.
 	string name; // The name of the robot.
 	
-	// TODO: Rework this to be nicer.
 	bool need_to_backtrack <- false;
 	int last_edge; // Pointer to the last edge the robot has traversed in the graph
 	point last; // The last node the robot has passed.
 	
-	// TODO robots need to 'order' the pickups given the earliest pickup/latest dropoff times
-	list<int> pickup_list;  // lists the remaining pickup locations
-	list<int> dropoff_list;  // lists the remaining dropoff locations
-	list<int> deadlines;
-	// Const copy of the tasks.
-	list<int> t_pickup_list;
-	list<int> t_dropoff_list;
-	list<int> pickup_time;
-	list<int> dropoff_time;
+	list<list<int>> crates <- []; // [pick, drop, ptime, dtime]
+	int crate_pointer <- 0;
 	 
 	bool has_crate <- true; // whether robot has crate (= is moving towards dropoff); init at true to get first pickup location
 	bool finished_deliveries <- true;
@@ -192,7 +184,6 @@ species robot skills: [moving]{
 			charge_timer <- charge_timer_default;
 			battery_low <- false;
 			// route <- nil;
-			// TODO: Also need to say we are finished_delivering tasks.
 		}
 	}
 	
@@ -205,47 +196,34 @@ species robot skills: [moving]{
 		if(has_crate or route = nil){
 			if(route != nil){
 				if log_level <= DEPLOY { write name +": Dropped of crate at: (Node " + index_of(drop_nodes, location) +")"; }
+				crate_pointer <- crate_pointer + 1;
 			}
 			
 			// Now check if another pickup exists.
 			has_crate <- false;
 			if(battery_low){
+				if log_level <= DEBUG { write name+ ": crates:" + crates; }
+				if log_level <= DEBUG { write name+ ": crate pointer:" + crate_pointer; }
+		
+				list<list<int>> outstanding_crates <- copy_between(crates, crate_pointer-1, length(crates)-1);
+				if log_level <= DEPLOY { write name+": Sending back the following uncompleted tasks: " + outstanding_crates; }
 				
-				int outstanding_tasks <- max(length(pickup_list), length(dropoff_list));
-				int remaining_index <- length(t_pickup_list) - outstanding_tasks;
-				
-				if log_level <= DEBUG { write name + ": Pickup List: " + pickup_list; }
-				if log_level <= DEBUG { write name + ": Dropoff List: " + dropoff_list; }
-				if log_level <= DEBUG { write name + ": t_Pickup List: " + t_pickup_list; }
-				if log_level <= DEBUG { write name + ": t_Dropoff List: " + t_dropoff_list; }
-				if log_level <= DEBUG { write name + ": Remaining Index: " + remaining_index; }
-				
-				// TODO: Figure out where thid goes, this crashes ATM
-				list<list<int>> redistribute_tasks;
-				if (remaining_index <= (length(t_pickup_list)-1)){
-					loop i from: remaining_index to: (length(t_pickup_list)-1){
-					redistribute_tasks <- redistribute_tasks + [[t_pickup_list[i], t_dropoff_list[i]]];  
-					}
-				}
-				if log_level <= DEPLOY { write name + ": Sending back the following uncompleted tasks: " + redistribute_tasks; }
-				// TODO send back to controller
+				// Send unfinished tasks back to controller
 				ask controller {
-					do add_tasks(redistribute_tasks);
+					do add_tasks(outstanding_crates);
 				}
-				dropoff_list <- ([]);
-				pickup_list<- ([]);
-				t_dropoff_list <- ([]);
-				t_pickup_list<- ([]);
+				outstanding_crates <- [[]];
+				crate_pointer <- 0;
 				
 				target <- recharge_point; // when done, go to personal recharge point
 				route <- path_between(mg, location, target);
 				going_charging <- true;
 				return;
 				
-			}else if(length(pickup_list) > 0){
-				int index <- pickup_list at 0;
+			}else if (crate_pointer < length(crates)){
+				int index <- (crates at crate_pointer)[0];
 				target <- (drop_nodes at index);  // set new target position from drop_nodes
-				remove from:pickup_list index:0; // pop from list pickup list
+
 				if log_level <= DEPLOY { write name + ": Is moving to pickup crate at: (Node " + index + ")"; }
 			}else{
 				if log_level <= DEPLOY { write name + ": Finished delivering crates"; }
@@ -256,8 +234,8 @@ species robot skills: [moving]{
 			// Don't have a crate yet, so we arrived at a pickup point
 			
 			// TODO: Check if we are to early to pick up the crate
-			if(cycle_count < pickup_time at 0){ 
-				if log_level <= DEPLOY { write name + ": To early to pick up crate at(time): " + (pickup_time at 0); }
+			if(cycle_count < (crates at crate_pointer)[2]){ 
+				if log_level <= DEPLOY { write name + ": To early to pick up crate at(time): " + (crates at crate_pointer)[2]; }
 				waiting_for_pickup <- true;
 				return;
 			}
@@ -265,10 +243,10 @@ species robot skills: [moving]{
 			if log_level <= DEPLOY { write name + ": Pickup up crate at: (Node " + index_of(drop_nodes, location) +")"; }
 			// check if crate is potentially rotten
 			has_crate <- true;
-			if(length(dropoff_list) > 0){
-				int index <- dropoff_list at 0;  // set new target to be dropoff point
+			if(crate_pointer < length(crates)){
+				int index <- (crates at crate_pointer)[1];  // set new target to be dropoff point
 				target <- (drop_nodes at index);
-				remove from:dropoff_list index:0;
+				
 				if(rnd(100) > (100-rotting_chance)){
 					target <- (triage_nodes at 0);
 					if log_level <= DEPLOY { write name + ": Detected potentially rotting crate"; }
@@ -289,8 +267,8 @@ species robot skills: [moving]{
 		}
 	}
 	
-	reflex wait_for_crate when: waiting_for_pickup and cycle_count >= (pickup_time at 0)  {
-		if log_level <= DEPLOY { write name + ": Ready to pick up crate at(time): " + (pickup_time at 0); }
+	reflex wait_for_crate when: waiting_for_pickup and cycle_count >= (crates at crate_pointer)[2]  {
+		if log_level <= DEPLOY { write name + ": Ready to pick up crate at(time): " + (crates at crate_pointer)[2]; }
 		waiting_for_pickup <- false;
 	} 
 	
@@ -319,7 +297,7 @@ species robot skills: [moving]{
 			// Since we encountered an obstacle on last_edge we need to update its weight such that we don't take that edge.
 			
 			graph temp_graph <- copy(mg);
-			list<int> temp_weights <- copy(edge_weights);
+			list<float> temp_weights <- copy(edge_weights);
 			temp_weights[last_edge] <- 500;
 			
 			temp_graph <- with_weights (temp_graph, temp_weights);
@@ -370,14 +348,6 @@ species robot skills: [moving]{
 	}
 	
 	action start{
-		t_pickup_list <- copy(pickup_list);
-		t_dropoff_list <- copy(dropoff_list);
-		
-		if log_level <= DEBUG { write name + ": Pickup List: " + pickup_list; }
-		if log_level <= DEBUG { write name + ": Dropoff List: " + dropoff_list; }
-		if log_level <= DEBUG { write name + ": t_Pickup List: " + t_pickup_list; }
-		if log_level <= DEBUG { write name + ": t_Dropoff List: " + t_dropoff_list; }
-		
 		finished_deliveries <- false;
 		has_crate <- false;
 		target <- nil;
@@ -401,7 +371,7 @@ species controller {
 	action add_task {
 		// Ask the user for the specific new task to add.
 		map<string,unknown> values <- user_input_dialog([enter('Pickup', 0), enter('Dropoff', 0), enter('Earliest pick-up', 0), enter('Latest drop-off', 1000)]); 
-		tasks <- tasks + [[values at "Pickup", values at "Dropoff", values at "Earliest pick-up", values at "Latest drop-off"]];
+		tasks <- tasks + [values at "Pickup", values at "Dropoff", values at "Earliest pick-up", values at "Latest drop-off"];
 		
 		if log_level <= DEBUG { write "Task added: " + tasks; }
 		do divide_tasks;
@@ -433,10 +403,7 @@ species controller {
 			// TODO: This needs to be done in a smarter way.
 			if cur.finished_deliveries {
 				ask cur {
-					pickup_list <- pickup_list + task[0];
-					dropoff_list <- dropoff_list + task[1];
-					pickup_time <- pickup_time + task[2];
-					dropoff_time <- pickup_time + task[3];
+					crates <- crates + [task]; 
 				}
 			}	
 			i <- (i + 1) mod l;
