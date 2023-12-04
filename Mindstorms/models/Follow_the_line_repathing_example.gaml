@@ -193,7 +193,11 @@ species robot skills: [moving]{
 		
 		if(has_crate or route = nil){
 			if(route != nil){
-				// TODO: Check the crate is ready to drop off / check if it has been droped of too late.
+				if (cycle_count > (crates at crate_pointer)[3]){
+					if log_level <= DEPLOY { write name+ ": Delivered crate too late at(time):" + cycle_count; }
+					// TODO: Check what should happen if we drop of the crate too late. Also Check that this is not the triage NODE !!!
+				}
+				
 				if log_level <= DEPLOY { write name +": Dropped of crate at: (Node " + index_of(drop_nodes, location) +")"; }
 				crate_pointer <- crate_pointer + 1;
 			}
