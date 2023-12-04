@@ -188,13 +188,12 @@ species robot skills: [moving]{
 	}
 	
 	// Base reflex that drives the robot to move
-	// TODO: This needs to be done better.
 	reflex when: not waiting_for_pickup and  not is_charging and not finished_deliveries and not going_charging and (route = nil or location = target){
 		if log_level <= DEBUG { write name + ": Entering base reflex"; }
 		
-		// TODO prettify/split up this reflex -> not really possible; reflexes can run in parallel (no mutex on variables)
 		if(has_crate or route = nil){
 			if(route != nil){
+				// TODO: Check the crate is ready to drop off / check if it has been droped of too late.
 				if log_level <= DEPLOY { write name +": Dropped of crate at: (Node " + index_of(drop_nodes, location) +")"; }
 				crate_pointer <- crate_pointer + 1;
 			}
@@ -232,8 +231,7 @@ species robot skills: [moving]{
 			}
 		}else{
 			// Don't have a crate yet, so we arrived at a pickup point
-			
-			// TODO: Check if we are to early to pick up the crate
+			// Check if we are to early to pick up the crate
 			if(cycle_count < (crates at crate_pointer)[2]){ 
 				if log_level <= DEPLOY { write name + ": To early to pick up crate at(time): " + (crates at crate_pointer)[2]; }
 				waiting_for_pickup <- true;
@@ -288,8 +286,8 @@ species robot skills: [moving]{
 		}
 	}
 	
-	// Reflex of the Robot to go back to the last edge it passed.
-	reflex go_back when: need_to_backtrack{
+	// Reflex of the Robot to go back to the last edge it passed after waiting for some time
+	reflex go_back when: need_to_backtrack and should_wait_for = 0{
 		if log_level <= DEBUG { write name + ": Value of last = " + last; }
 		route <- path_between(mg, location, last); 
 		if(location = last){
@@ -306,13 +304,13 @@ species robot skills: [moving]{
 		}
 	}
 	
-	reflex obstacle_avoidance when: avoidrect overlaps union(obstacle collect each.geo){
+	reflex obstacle_avoidance when: avoidrect overlaps union(obstacle collect each.geo) and speed != 0{
 		if log_level <= DEPLOY {write name+": Object detected."; }
-		// should_wait_for <- should_wait_for_bound; // TODO: This is not supoer elegant behaviour ATM
+		should_wait_for <- should_wait_for_bound;
 		need_to_backtrack <- true;
+		speed <- 0;
 	}
 	
-	// TODO: We should wait before doing the rerouting action
 	reflex robot_avoidance{
 		if (avoidrect overlaps (union(robot collect geometry(each)) - geometry(self))){
 			if log_level <= DEPLOY {write name+": Object detected."; }
@@ -331,14 +329,15 @@ species robot skills: [moving]{
 						speed <- 0.0;
 					}else{
 						if log_level <= DEBUG { write name+": We are shorter"; }
-						need_to_backtrack <- true; // TODO: THis is still not ideal yet.
+						need_to_backtrack <- true;
 					}
 				}
 			}
 		}
 	}
 	
-	reflex wait when: should_wait_for = 0{  // Reflex to wait if we encounter an obstacle
+	// Stop the robot for a while after detecting an obstacle.
+	reflex wait when: should_wait_for = 0{
 		speed <- 1.0;
 	}
 	
@@ -415,7 +414,6 @@ species controller {
 			do start;
 		}
 		
-		// TODO: Interesting oberservation that any follow-up schedule will never be ideal.
 		tasks <- []; // Clear all the distriubted tasks
 	}
 	
