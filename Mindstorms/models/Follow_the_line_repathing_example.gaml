@@ -12,6 +12,7 @@ global {
 	list<list<int>> tasks <- [[3,0], [0,3]];
 	int log_level <- 0;
 	int charge_time <- 100;
+	int waiting_time <- 20;
 	
 	// - These are hardcoded:
 	graph movement_graph<-spatial_graph([]);  // The graph that the robots move on.
@@ -82,16 +83,18 @@ global {
 		create robot number: 1 with: (
 			location: recharge_nodes at 0,
 			aspect_color: #green,
-			mg: copy(movement_graph),
+			mg: movement_graph, // copy(movement_graph),
 			name: "green",
-			charge_timer_default: charge_time
+			charge_timer_default: charge_time,
+			should_wait_for_bound: waiting_time
 		);
 		create robot number: 1 with: (
 			location: recharge_nodes at 1,
 			aspect_color: #red,
-			mg: copy(movement_graph),
+			mg: movement_graph, // copy(movement_graph),
 			name: "red",
-			charge_timer_default: charge_time
+			charge_timer_default: charge_time,
+			should_wait_for_bound: waiting_time
 		);
 		
 		// Create the controller
@@ -119,13 +122,17 @@ species robot skills: [moving]{
 	string name; // The name of the robot.
 	
 	// TODO: Rework this to be nicer.
-	bool flag <- false;
+	bool need_to_backtrack <- false;
 	int last_edge; // Pointer to the last edge the robot has traversed in the graph
 	point last; // The last node the robot has passed.
 	
 	// TODO robots need to 'order' the pickups given the earliest pickup/latest dropoff times
 	list<int> pickup_list;  // lists the remaining pickup locations
-	list<int> dropoff_list;  // lists the remaining dropoff locations 
+	list<int> dropoff_list;  // lists the remaining dropoff locations
+	// Const copy of the tasks.
+	list<int> t_pickup_list;
+	list<int> t_dropoff_list;
+	 
 	bool has_crate <- true; // whether robot has crate (= is moving towards dropoff); init at true to get first pickup location
 	bool finished_deliveries <- true;
 	
@@ -136,7 +143,10 @@ species robot skills: [moving]{
 	bool is_charging <- false;
 	int charge_timer <- 100; 
 	int charge_timer_default; // how long to charge for
-	 
+	
+	// TODO: Make this work with the step mechanic eventually.
+	int should_wait_for <- 0;
+	int should_wait_for_bound;
 	
 	init{
 		last <- location;
@@ -163,23 +173,34 @@ species robot skills: [moving]{
 	// FIXME: This can be different with the step mechanic for variables
 	reflex when: is_charging{
 		charge_timer <- charge_timer - 1;
+		if log_level <= DEBUG { write name + ": " + charge_timer; }
 		if(charge_timer = 10){
 			if log_level <= DEPLOY { write name + ": Almost finished charging, only ten more minutes!"; }
-			// TODO: Notify the controller.
+			
+			// Notify the controller.
+			finished_deliveries <- true;
+			ask controller {
+				do divide_tasks;
+			}
 		}
 		if(charge_timer = 0){
 			if log_level <= DEPLOY { write name + ": Finished charging! Ready for action"; }
 			is_charging <- false;
 			charge_timer <- charge_timer_default;
+			battery_low <- false;
+			// route <- nil;
+			// TODO: Also need to say we are finished_delivering tasks.
 		}
 	}
 	
 	// Base reflex that drives the robot to move
+	// TODO: This needs to be done better.
 	reflex when: not is_charging and not finished_deliveries and not going_charging and (route = nil or location = target){
+		if log_level <= DEBUG { write name + ": Entering base reflex"; }
+		
 		// TODO prettify/split up this reflex -> not really possible; reflexes can run in parallel (no mutex on variables)
 		if(has_crate or route = nil){
 			if(route != nil){
-				// TODO: Get the node id here
 				if log_level <= DEPLOY { write name +": Dropped of crate at: (Node " + index_of(drop_nodes, location) +")"; }
 			}
 			
@@ -187,25 +208,38 @@ species robot skills: [moving]{
 			has_crate <- false;
 			if(battery_low){
 				
+				int outstanding_tasks <- max(length(pickup_list), length(dropoff_list));
+				int remaining_index <- length(t_pickup_list) - outstanding_tasks;
+				
+				if log_level <= DEBUG { write name + ": Pickup List: " + pickup_list; }
+				if log_level <= DEBUG { write name + ": Dropoff List: " + dropoff_list; }
+				if log_level <= DEBUG { write name + ": t_Pickup List: " + t_pickup_list; }
+				if log_level <= DEBUG { write name + ": t_Dropoff List: " + t_dropoff_list; }
+				if log_level <= DEBUG { write name + ": Remaining Index: " + remaining_index; }
+				
 				// TODO: Figure out where thid goes, this crashes ATM
 				list<list<int>> redistribute_tasks;
-				loop i from: 0 to: (length(pickup_list)-1){
-					redistribute_tasks <- redistribute_tasks + [[pickup_list[i], dropoff_list[i]]];  
+				if (remaining_index <= (length(t_pickup_list)-1)){
+					loop i from: remaining_index to: (length(t_pickup_list)-1){
+					redistribute_tasks <- redistribute_tasks + [[t_pickup_list[i], t_dropoff_list[i]]];  
+					}
 				}
-				
+				if log_level <= DEPLOY { write name + ": Sending back the following uncompleted tasks: " + redistribute_tasks; }
 				// TODO send back to controller
 				ask controller {
 					do add_tasks(redistribute_tasks);
 				}
 				dropoff_list <- ([]);
 				pickup_list<- ([]);
+				t_dropoff_list <- ([]);
+				t_pickup_list<- ([]);
 				
 				target <- recharge_point; // when done, go to personal recharge point
 				route <- path_between(mg, location, target);
 				going_charging <- true;
 				return;
-			}
-			if(length(pickup_list) > 0){
+				
+			}else if(length(pickup_list) > 0){
 				int index <- pickup_list at 0;
 				target <- (drop_nodes at index);  // set new target position from drop_nodes
 				remove from:pickup_list index:0; // pop from list pickup list
@@ -214,11 +248,9 @@ species robot skills: [moving]{
 				if log_level <= DEPLOY { write name + ": Finished delivering crates"; }
 				finished_deliveries <- true;
 				target <- recharge_point; // when done, go to personal recharge point				
-
-				// TODO add the controller code here @Joshua you konw what should happen here?
 			}
 		}else{
-			// don't have a crate yet, so we arrived at a pickup point
+			// Don't have a crate yet, so we arrived at a pickup point
 			if log_level <= DEPLOY { write name + ": Pickup up crate at: (Node " + index_of(drop_nodes, location) +")"; }
 			// check if crate is potentially rotten
 			has_crate <- true;
@@ -239,6 +271,7 @@ species robot skills: [moving]{
 		}
 		route <- path_between(mg, location, target);
 		if log_level <= DEBUG { write name + ": Follows route: " + route; }
+		
 		
 		ask controller {
 			do divide_tasks;
@@ -262,80 +295,77 @@ species robot skills: [moving]{
 	}
 	
 	// Reflex of the Robot to go back to the last edge it passed.
-	// TODO: Make this not rely on the flag since that is a bit hacky.
-	reflex go_back when: flag{
+	reflex go_back when: need_to_backtrack{
 		if log_level <= DEBUG { write name + ": Value of last = " + last; }
 		route <- path_between(mg, location, last); 
 		if(location = last){
 			// If we reached the last node it is time to recalculate the path.
 			// Since we encountered an obstacle on last_edge we need to update its weight such that we don't take that edge.
 			
-			// FIXME: The way this works we don't need mg to be a copy.
 			graph temp_graph <- copy(mg);
 			list<int> temp_weights <- copy(edge_weights);
 			temp_weights[last_edge] <- 500;
 			
 			temp_graph <- with_weights (temp_graph, temp_weights);
 			route <- path_between(temp_graph, location, target);
-			flag <- false;	
+			need_to_backtrack <- false;	
 		}
 	}
 	
 	reflex obstacle_avoidance when: avoidrect overlaps union(obstacle collect each.geo){
 		if log_level <= DEPLOY {write name+": Object detected."; }
-		flag <- true;
+		// should_wait_for <- should_wait_for_bound; // TODO: This is not supoer elegant behaviour ATM
+		need_to_backtrack <- true;
 	}
 	
-	// TODO: This can and should be done better.
+	// TODO: We should wait before doing the rerouting action
 	reflex robot_avoidance{
-		// TODO: This kind of works for now.
 		if (avoidrect overlaps (union(robot collect geometry(each)) - geometry(self))){
 			if log_level <= DEPLOY {write name+": Object detected."; }
-			// which robot and 			
+			
+			// Find the robot we are overlapping with:	
 			loop rob over: robot{
-				// check which overlaps
 				if (rob = self){ continue; }
-				if (avoidrect overlaps geometry(rob)){
-					// Found the overlapping
-					
+				if (avoidrect overlaps geometry(rob)){					
 					float rob_distance <- distance_to(rob.location, rob.last);
 					float our_distance <- distance_to(self.location, self.last);
+					
+					// Decide if we should stop or the other robot should stop.
 					if(rob_distance < our_distance){
 						if log_level <= DEBUG { write name+": Other robot is shorter"; }
-						speed <- 0;
+						should_wait_for <- should_wait_for_bound;
 					}else{
-						// TODO: Need to wait first before this is done, this could be done with the step as a cool down.
 						if log_level <= DEBUG { write name+": We are shorter"; }
-						flag <- true; // TODO: THis is still not ideal yet.
+						need_to_backtrack <- true; // TODO: THis is still not ideal yet.
 					}
 				}
 			}
-		}else{
-			speed <- 1; // TODO: This is very hacky so not sure this is great
 		}
 	}
 	
+	reflex wait{  // Reflex to wait if we encounter an obstacle
+		if should_wait_for >= 0 {
+			speed <- 0.0;
+			should_wait_for <- should_wait_for - 1;
+		}else{
+			speed <- 1.0;
+		}
+	}
 	
 	action battery_warning {
 		if log_level <= DEPLOY { write name+": Battery is low."; }
-		
-		// TODO: communicate remaining orders back to central location
 		battery_low <- true;
 	}
 	
 	action start{
-		finished_deliveries <- false;
-		has_crate <- false;
-		target <- nil;
-		route <- nil;
-	}
+		t_pickup_list <- copy(pickup_list);
+		t_dropoff_list <- copy(dropoff_list);
 		
-	action tasks(list l1, list l2) {
-		pickup_list <- l1;
-		dropoff_list <- l2;
-
-		// TODO: This should be redone because this is just way to verbose.
-		// Needed to get the robot back to the base bahvaiour
+		if log_level <= DEBUG { write name + ": Pickup List: " + pickup_list; }
+		if log_level <= DEBUG { write name + ": Dropoff List: " + dropoff_list; }
+		if log_level <= DEBUG { write name + ": t_Pickup List: " + t_pickup_list; }
+		if log_level <= DEBUG { write name + ": t_Dropoff List: " + t_dropoff_list; }
+		
 		finished_deliveries <- false;
 		has_crate <- false;
 		target <- nil;
@@ -409,7 +439,7 @@ species controller {
 	
 	aspect base {
 		draw rectangle(40,5) color: #black;
-		draw "Controller" color: #white;
+		draw "Controller" color: #white at: location + point(-1,1);
 	}
 }
 
@@ -422,6 +452,7 @@ experiment MyExperiment type: gui {
 	parameter "Inital Tasks list<[pickup, dropoff]>" var: tasks;
 	parameter "Log Level (0=debug, 1=deploy, 2=silence)" var: log_level min:0 max:2;
 	parameter "Charging Time" var: charge_time;
+	parameter "Waiting Time" var: waiting_time;
 	
 	// Create a new obstacle on the location the user clicked but never multiple at the same spot.
 	action place_obstacle {
