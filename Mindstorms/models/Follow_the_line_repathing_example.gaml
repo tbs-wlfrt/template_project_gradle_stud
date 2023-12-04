@@ -1,7 +1,6 @@
 model follow_the_line_warehouse
 
 global {
-	// @Joshua does this define the canvas?
 	geometry shape <- rectangle(200#m,200#m);
 	int DEBUG <- 0;
 	int  DEPLOY <- 1;
@@ -9,10 +8,12 @@ global {
 	// - These are parameters to the experiement:
 	int sensor_range <- 20;
 	int rotting_chance <- 15;
-	list<list<int>> tasks <- [[3,0], [0,3]];
-	int log_level <- 0;
+	list<list<int>> tasks <- [[3,0, 100, 10000], [0,3, 300, 10000]];
+	int log_level <- 1;
 	int charge_time <- 100;
 	int waiting_time <- 20;
+	
+	int cycle_count <- 0 update: cycle_count + 1;
 	
 	// - These are hardcoded:
 	graph movement_graph<-spatial_graph([]);  // The graph that the robots move on.
@@ -38,7 +39,6 @@ global {
 	    	movement_graph <- movement_graph add_node(nod);
 		}
 		
-		// TODO: I think this might be causing the issues:
 		// Add recharge points (one per robot!)
 		add point(25,25) to: recharge_nodes;
 		add point(175,175) to: recharge_nodes;
@@ -129,9 +129,12 @@ species robot skills: [moving]{
 	// TODO robots need to 'order' the pickups given the earliest pickup/latest dropoff times
 	list<int> pickup_list;  // lists the remaining pickup locations
 	list<int> dropoff_list;  // lists the remaining dropoff locations
+	list<int> deadlines;
 	// Const copy of the tasks.
 	list<int> t_pickup_list;
 	list<int> t_dropoff_list;
+	list<int> pickup_time;
+	list<int> dropoff_time;
 	 
 	bool has_crate <- true; // whether robot has crate (= is moving towards dropoff); init at true to get first pickup location
 	bool finished_deliveries <- true;
@@ -143,9 +146,9 @@ species robot skills: [moving]{
 	bool is_charging <- false;
 	int charge_timer <- 100; 
 	int charge_timer_default; // how long to charge for
+	bool waiting_for_pickup <- false;
 	
-	// TODO: Make this work with the step mechanic eventually.
-	int should_wait_for <- 0;
+	int should_wait_for <- 0 min:0 update: should_wait_for - 1;
 	int should_wait_for_bound;
 	
 	init{
@@ -195,7 +198,7 @@ species robot skills: [moving]{
 	
 	// Base reflex that drives the robot to move
 	// TODO: This needs to be done better.
-	reflex when: not is_charging and not finished_deliveries and not going_charging and (route = nil or location = target){
+	reflex when: not waiting_for_pickup and  not is_charging and not finished_deliveries and not going_charging and (route = nil or location = target){
 		if log_level <= DEBUG { write name + ": Entering base reflex"; }
 		
 		// TODO prettify/split up this reflex -> not really possible; reflexes can run in parallel (no mutex on variables)
@@ -251,6 +254,14 @@ species robot skills: [moving]{
 			}
 		}else{
 			// Don't have a crate yet, so we arrived at a pickup point
+			
+			// TODO: Check if we are to early to pick up the crate
+			if(cycle_count < pickup_time at 0){ 
+				if log_level <= DEPLOY { write name + ": To early to pick up crate at(time): " + (pickup_time at 0); }
+				waiting_for_pickup <- true;
+				return;
+			}
+			
 			if log_level <= DEPLOY { write name + ": Pickup up crate at: (Node " + index_of(drop_nodes, location) +")"; }
 			// check if crate is potentially rotten
 			has_crate <- true;
@@ -277,6 +288,11 @@ species robot skills: [moving]{
 			do divide_tasks;
 		}
 	}
+	
+	reflex wait_for_crate when: waiting_for_pickup and cycle_count >= (pickup_time at 0)  {
+		if log_level <= DEPLOY { write name + ": Ready to pick up crate at(time): " + (pickup_time at 0); }
+		waiting_for_pickup <- false;
+	} 
 	
 	reflex advance when: route != nil and not is_charging{
 		do follow path: route; // alternaively with move_weights: graph_weights;
@@ -334,6 +350,7 @@ species robot skills: [moving]{
 					if(rob_distance < our_distance){
 						if log_level <= DEBUG { write name+": Other robot is shorter"; }
 						should_wait_for <- should_wait_for_bound;
+						speed <- 0.0;
 					}else{
 						if log_level <= DEBUG { write name+": We are shorter"; }
 						need_to_backtrack <- true; // TODO: THis is still not ideal yet.
@@ -343,13 +360,8 @@ species robot skills: [moving]{
 		}
 	}
 	
-	reflex wait{  // Reflex to wait if we encounter an obstacle
-		if should_wait_for >= 0 {
-			speed <- 0.0;
-			should_wait_for <- should_wait_for - 1;
-		}else{
-			speed <- 1.0;
-		}
+	reflex wait when: should_wait_for = 0{  // Reflex to wait if we encounter an obstacle
+		speed <- 1.0;
 	}
 	
 	action battery_warning {
@@ -386,8 +398,11 @@ species controller {
 		do divide_tasks;
 	}
 	
-	action add_task { // Add a random task.
-		tasks <- tasks + [[rnd(length(drop_nodes)-1), rnd(length(drop_nodes)-1)]];
+	action add_task {
+		// Ask the user for the specific new task to add.
+		map<string,unknown> values <- user_input_dialog([enter('Pickup', 0), enter('Dropoff', 0), enter('Earliest pick-up', 0), enter('Latest drop-off', 1000)]); 
+		tasks <- tasks + [[values at "Pickup", values at "Dropoff", values at "Earliest pick-up", values at "Latest drop-off"]];
+		
 		if log_level <= DEBUG { write "Task added: " + tasks; }
 		do divide_tasks;
 	}
@@ -404,10 +419,13 @@ species controller {
 		
 		if log_level <= DEBUG { write "Free robots: " + free_robots; }
 		if log_level <= DEBUG { write "Tasks: " + tasks; }
-
 		
 		int l <- length(free_robots);
 		if (l = 0){ return; } // If there are no free robots stop.
+		
+		// Sort the crates by earliest pick_up time.
+		tasks <- tasks sort_by (each[2]);
+		if log_level <= DEBUG { write "Sorted Tasks: " + tasks; }
 		
 		loop task over: tasks {
 			robot cur <- free_robots[i];
@@ -417,6 +435,8 @@ species controller {
 				ask cur {
 					pickup_list <- pickup_list + task[0];
 					dropoff_list <- dropoff_list + task[1];
+					pickup_time <- pickup_time + task[2];
+					dropoff_time <- pickup_time + task[3];
 				}
 			}	
 			i <- (i + 1) mod l;
@@ -445,11 +465,10 @@ species controller {
 
 
 experiment MyExperiment type: gui {
-	// TODO: Add more here?
 	user_command "Clear all Obstacles" action: clean_obstacles category:"Obstacles";
 	parameter "Sensor Range" var: sensor_range;
 	parameter "Rotting Chance (int%)" var: rotting_chance;
-	parameter "Inital Tasks list<[pickup, dropoff]>" var: tasks;
+	parameter "Inital Tasks list<[pickup, dropoff, t_pick, t_drop]>" var: tasks;
 	parameter "Log Level (0=debug, 1=deploy, 2=silence)" var: log_level min:0 max:2;
 	parameter "Charging Time" var: charge_time;
 	parameter "Waiting Time" var: waiting_time;
