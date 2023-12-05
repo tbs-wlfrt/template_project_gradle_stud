@@ -4,11 +4,12 @@ global {
 	geometry shape <- rectangle(200#m,200#m);
 	int DEBUG <- 0;
 	int  DEPLOY <- 1;
+	float MAX <- 1000.0;
 	
 	// - These are parameters to the experiement:
 	int sensor_range <- 20;
 	int rotting_chance <- 15;
-	list<list<int>> tasks <- [[3,0, 100, 10000], [0,3, 300, 10000]];
+	list<list<int>> tasks <- [[3,0, 100, 10000], [0,3, 300, 10000], [3,0, 100, 10000]];
 	int log_level <- 1;
 	int charge_time <- 100;
 	int waiting_time <- 20;
@@ -22,6 +23,9 @@ global {
 	list<point> triage_nodes;  // The triage point.
 	list<point> recharge_nodes;  // The recharge points.
 	list<float> edge_weights <- [5, 10, 10, 5];  // The weights of the graph.
+	
+	list<float> dynamic_weights;
+	graph dynamic_graph;
 		
     init {
     	// Add the points to the list and graph:
@@ -77,13 +81,15 @@ global {
 			geometry(movement_graph.edges at 9).perimeter
 		];
 		movement_graph <-  with_weights (movement_graph, edge_weights);
+		dynamic_weights <- copy(edge_weights);
+		dynamic_graph <- copy(movement_graph);
 	
 		
 		// Create the robots
 		create robot number: 1 with: (
 			location: recharge_nodes at 0,
 			aspect_color: #green,
-			mg: movement_graph, // copy(movement_graph),
+			// mg: movement_graph, // copy(movement_graph),
 			name: "green",
 			charge_timer_default: charge_time,
 			should_wait_for_bound: waiting_time
@@ -91,7 +97,7 @@ global {
 		create robot number: 1 with: (
 			location: recharge_nodes at 1,
 			aspect_color: #red,
-			mg: movement_graph, // copy(movement_graph),
+			// mg: movement_graph, // copy(movement_graph),
 			name: "red",
 			charge_timer_default: charge_time,
 			should_wait_for_bound: waiting_time
@@ -115,7 +121,7 @@ species robot skills: [moving]{
 	user_command "Send Battery Warning" action: battery_warning;
 	
 	
-	graph mg; // The local copy of the graph that the robot has TODO: Think about this is still needed
+	// graph mg; // The local copy of the graph that the robot has TODO: Think about this is still needed
 	point target; // The next point the robot will move to.
 	path route; // The route that the robot will take to the target.
 	rgb aspect_color; // The color of the robot.
@@ -131,6 +137,8 @@ species robot skills: [moving]{
 	bool has_crate <- true; // whether robot has crate (= is moving towards dropoff); init at true to get first pickup location
 	bool finished_deliveries <- true;
 	
+	bool obstacle_detected <- false; // Keeps track of if we encoutnered an actual object.
+	
 	geometry avoidrect;
 	point recharge_point;
 	bool battery_low <- false;
@@ -142,6 +150,9 @@ species robot skills: [moving]{
 	
 	int should_wait_for <- 0 min:0 update: should_wait_for - 1;
 	int should_wait_for_bound;
+	
+	// I know this sucks but it is what it is :/
+	int distance <- 0 update: distance + (int(speed)*int(not is_charging)*int(route != nil));
 	
 	init{
 		last <- location;
@@ -183,7 +194,8 @@ species robot skills: [moving]{
 			is_charging <- false;
 			charge_timer <- charge_timer_default;
 			battery_low <- false;
-			// route <- nil;
+			route <- nil;
+			distance <- 0; // Collect new milage.
 		}
 	}
 	
@@ -193,12 +205,17 @@ species robot skills: [moving]{
 		
 		if(has_crate or route = nil){
 			if(route != nil){
-				if (cycle_count > (crates at crate_pointer)[3]){
-					if log_level <= DEPLOY { write name+ ": Delivered crate too late at(time):" + cycle_count; }
-					// TODO: Check what should happen if we drop of the crate too late. Also Check that this is not the triage NODE !!!
-				}
+				int node_index <- index_of(drop_nodes, location);
 				
-				if log_level <= DEPLOY { write name +": Dropped of crate at: (Node " + index_of(drop_nodes, location) +")"; }
+				if(node_index = -1){
+					if log_level <= DEPLOY { write name +": Dropped of crate at triage point."; }
+				}else if(cycle_count > (crates at crate_pointer)[3]){
+					if log_level <= DEPLOY { write name+ ": Dropped of crate too late at(time):" + cycle_count; }
+					// TODO: Should wait here for fruther instructions according to the requirements.
+				}else{
+					if log_level <= DEPLOY { write name+ ": Dropped of crate on time at(time):" + cycle_count; }
+				}
+						
 				crate_pointer <- crate_pointer + 1;
 			}
 			
@@ -215,11 +232,11 @@ species robot skills: [moving]{
 				ask controller {
 					do add_tasks(outstanding_crates);
 				}
-				outstanding_crates <- [[]];
+				crates <- [];
 				crate_pointer <- 0;
 				
 				target <- recharge_point; // when done, go to personal recharge point
-				route <- path_between(mg, location, target);
+				route <- path_between(dynamic_graph, location, target);
 				going_charging <- true;
 				return;
 				
@@ -260,7 +277,7 @@ species robot skills: [moving]{
 				target <- recharge_point; // when done, go to personal recharge point
 			}
 		}
-		route <- path_between(mg, location, target);
+		route <- path_between(dynamic_graph, location, target);
 		if log_level <= DEBUG { write name + ": Follows route: " + route; }
 		
 		
@@ -275,44 +292,72 @@ species robot skills: [moving]{
 	} 
 	
 	reflex advance when: route != nil and not is_charging{
-		do follow path: route; // alternaively with move_weights: graph_weights;
+		do follow path: route; //  move_weights: edge_weights; // alternaively with move_weights: graph_weights;
 	}
 	
 	reflex track_path {
 		point int_loc_fl <- point({floor(location.x), floor(location.y)});
 		point int_loc_cl <- point({ceil(location.x), ceil(location.y)});
-		if (int_loc_fl in mg.vertices or int_loc_cl in mg.vertices){
-			if log_level <= DEBUG {write name + ": At " + location.x + "," + location.y; }
-			last <- location;
-		}		
+		if (int_loc_fl in movement_graph.vertices){
+			// if log_level <= DEBUG {write name + ": At " + location.x + "," + location.y; }
+			last <- int_loc_fl;
+			
+		}else if (int_loc_cl in movement_graph.vertices){
+			// if log_level <= DEBUG {write name + ": At " + location.x + "," + location.y; }
+			last <- int_loc_cl;
+		}
+				
 		if (current_edge != nil){
-			last_edge <- mg.edges index_of(current_edge);
+			last_edge <- movement_graph.edges index_of(current_edge);
 		}
 	}
 	
 	// Reflex of the Robot to go back to the last edge it passed after waiting for some time
 	reflex go_back when: need_to_backtrack and should_wait_for = 0{
+		
 		if log_level <= DEBUG { write name + ": Value of last = " + last; }
-		route <- path_between(mg, location, last); 
+		if log_level <= DEBUG { write name + ": Value of robot = " + location; }
+		
+		route <- path_between(movement_graph, location, last);   // Go back.
+		// need_to_backtrack <- false;
 		if(location = last){
+			if log_level <= DEBUG { write name + ": Location is last "; }
 			// If we reached the last node it is time to recalculate the path.
 			// Since we encountered an obstacle on last_edge we need to update its weight such that we don't take that edge.
 			
-			graph temp_graph <- copy(mg);
-			list<float> temp_weights <- copy(edge_weights);
-			temp_weights[last_edge] <- 500;
-			
-			temp_graph <- with_weights (temp_graph, temp_weights);
-			route <- path_between(temp_graph, location, target);
-			need_to_backtrack <- false;	
+			if(obstacle_detected){
+				// Saw a box notify other robots of that box and repath.
+				obstacle_detected <- false;
+				need_to_backtrack <- false;
+				route <- path_between(dynamic_graph, location, target);
+				
+			}else{
+				float temp <- dynamic_weights[last_edge];
+				dynamic_weights[last_edge] <- MAX;
+				dynamic_graph <- with_weights(dynamic_graph, dynamic_weights);
+				route <- path_between(dynamic_graph, location, target);
+				need_to_backtrack <- false;
+				dynamic_weights[last_edge] <- temp; // reset since we don't want to propagate the info that we saw a robot.
+				dynamic_graph <- with_weights(dynamic_graph, dynamic_weights);
+			}		
 		}
 	}
 	
-	reflex obstacle_avoidance when: avoidrect overlaps union(obstacle collect each.geo) and speed != 0{
+	reflex obstacle_avoidance when: avoidrect overlaps union(obstacle collect each.geo) and not obstacle_detected{
 		if log_level <= DEPLOY {write name+": Object detected."; }
 		should_wait_for <- should_wait_for_bound;
 		need_to_backtrack <- true;
+		obstacle_detected <- true;
 		speed <- 0;
+		
+		if log_level <= DEPLOY {write name+": Obstacle detected!"; }
+		
+		// Update the graph
+		dynamic_weights[last_edge] <- MAX;
+		dynamic_graph <- with_weights(dynamic_graph, dynamic_weights);
+		ask robot { // Notify the other robots.
+			do recalculate_route();
+		}
 	}
 	
 	reflex robot_avoidance{
@@ -345,6 +390,11 @@ species robot skills: [moving]{
 		speed <- 1.0;
 	}
 	
+	// TODO: Fine Tune this value to adjust how long the robot can run on battery.
+	reflex battery_drained when: distance > 300 and not battery_low {
+		do battery_warning;
+	}
+	
 	action battery_warning {
 		if log_level <= DEPLOY { write name+": Battery is low."; }
 		battery_low <- true;
@@ -355,6 +405,29 @@ species robot skills: [moving]{
 		has_crate <- false;
 		target <- nil;
 		route <- nil;
+	}
+	
+	action recalculate_route {
+		if log_level <= DEBUG { write name+ ": Entering recalculate_route"; }
+		
+		// So the obstacles have been cleared up:
+		if (dynamic_graph = movement_graph){ 
+			route <- path_between(dynamic_graph, location, target);
+			if(obstacle_detected){need_to_backtrack <- false; } 
+			return;
+		}
+		
+		// If we are already moving back no need to re calculate.
+		if (need_to_backtrack){ return; }
+		
+		if (dynamic_weights[last_edge] = MAX){ // The robot is on a blocked path but doesn't know it yet.
+			if log_level <= DEBUG { write name+ ": On blocked path"; }
+			need_to_backtrack <- true;
+			
+		}else{ // Robot is not on a blocked path but could still plan on taking one so reroute just in case.
+			if log_level <= DEBUG { write name+ ": On none blocked path"; }
+			route <- path_between(dynamic_graph, location, target);
+		}
 	}
 }
 
@@ -451,8 +524,16 @@ experiment MyExperiment type: gui {
 	
 	// Remove all the obstacles.
 	action clean_obstacles{	
+		if log_level <= DEPLOY { write "All obstacles have been cleaered"; }
+		 
 		ask obstacle  {
 			do die;
+		}
+		dynamic_graph <- movement_graph;
+		dynamic_weights <- edge_weights;
+		
+		ask robot {
+			do recalculate_route;
 		}
 	}
 	
