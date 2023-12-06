@@ -30,6 +30,8 @@ public class RobotAgent extends Agent {
     int junctionColor = 5;      //red
     Boolean atJunction = false;
 
+    String jadeApi = "Agent1@192.168.0.158";
+
 
 
     String mission_type = ""; // the mission the agent has to complete
@@ -53,8 +55,33 @@ public class RobotAgent extends Agent {
     //static int ultrasonic_left = 0;
     //static int ultrasonic_right = 0;
 
+
+    void sendMessage(){
+        /*
+        For the messaging:
+
+        1)ACLMessage messageTemplate = new ACLMessage(INFORM);
+        2)messageTemplate.addReceiver(new AID("AgentRobot@192.168.0.176:1099/JADE",AID.ISGUID));
+        3)messageTemplate.setContent("Main Sends Message ->");
+        4)send(messageTemplate);
+        */
+
+        // Send rot message
+        ACLMessage messageTemplate = new ACLMessage(INFORM);
+        messageTemplate.addReceiver(new AID(jadeApi,AID.ISGUID));
+        messageTemplate.setContent("YOU ARE ROTTEN");
+        send(messageTemplate);
+    }
     protected void setup() {
-        // make a cyclyc behavior
+
+        sendMessage();
+        addBehaviour(new TickerBehaviour(this, 1000) {
+            @Override
+            protected void onTick() {
+                System.out.println("===========SENDING MESSAGE===============");
+                sendMessage();
+            }
+        });
         addBehaviour(follow_line_routine_right);
 
 
@@ -148,6 +175,7 @@ public class RobotAgent extends Agent {
                 // detect if robot is at a junction
                 atJunction = Device.sampleBackColor() == junctionColor;
                 if(!atJunction){
+                    System.out.println("+++++++++++++++Message sent++++++++++++++++++=");
                     //get light sensor reading from device
                     float sample = Device.sampleLightIntensity();
                     Device.sync(20);
@@ -171,7 +199,6 @@ public class RobotAgent extends Agent {
                 addBehaviour(rotate_right_to_exit);
             return super.onEnd();
         }
-
     };
 
 
