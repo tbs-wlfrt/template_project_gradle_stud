@@ -30,8 +30,8 @@ public class RobotAgent extends Agent {
     int junctionColor = 5;      //red
     Boolean atJunction = false;
 
-    String jadeApi = "Agent1@192.168.0.158";
-
+    String jadeApi = "Agent1@192.168.0.158:1099/JADE";
+    //String jadeApi = "Agent1";
 
 
     String mission_type = ""; // the mission the agent has to complete
@@ -75,16 +75,9 @@ public class RobotAgent extends Agent {
     protected void setup() {
 
         sendMessage();
-        addBehaviour(new TickerBehaviour(this, 1000) {
-            @Override
-            protected void onTick() {
-                System.out.println("===========SENDING MESSAGE===============");
-                sendMessage();
-            }
-        });
-        addBehaviour(follow_line_routine_right);
-
-
+        addBehaviour(init_message);
+        addBehaviour(message_recieve);
+        //addBehaviour(follow_line_routine_right);
 
         //addBehaviour(follow_line_routine);
         //addBehaviour(check_junction);
@@ -102,6 +95,31 @@ public class RobotAgent extends Agent {
         //  addBehaviour(tck);
         //    addBehaviour(turn_left);
     }
+
+    // oneshot behaviour that sends 1 message
+    OneShotBehaviour init_message = new OneShotBehaviour() {
+        @Override
+        public void action() {
+            ACLMessage messageTemplate = new ACLMessage(INFORM);
+            messageTemplate.addReceiver(new AID(jadeApi,AID.ISGUID));
+            messageTemplate.setContent("1st Message");
+            send(messageTemplate);
+        }
+    };
+
+    // message receiver
+    TickerBehaviour message_recieve = new TickerBehaviour(this, 200) {
+        @Override
+        protected void onTick() {
+            ACLMessage msg = receive();
+            if (msg != null) {
+                System.out.println("ROBOT Received: " + msg.getContent());
+                //TODO: insert logic for what to do when message recieved
+                //cases: if msg.content starts with "path" - update new path to follow
+            }
+        }
+    };
+
     // oneshot move forward behavior
     OneShotBehaviour move_forward = new OneShotBehaviour() {
         @Override
@@ -116,11 +134,11 @@ public class RobotAgent extends Agent {
             //TODO: modify and test so that motorspeeds arent changed, but motorsFullSpeed is (so that line follower PID works at the same time).
             Delay.msDelay(100);
             int distance = Device.sampleFrontDistance();
-            System.out.println("Speed: " + distance);
+            //System.out.println("Speed: " + distance);
 
             distancePID.updateVals(distance);
             int speed = (int) Math.min(distancePID.recalibrate()*speedMultiplier, 1000);
-            System.out.println("speed: " + speed);
+            //System.out.println("speed: " + speed);
 
             //System.out.println("Speed: " + speed);
             Device.setMotorSpeeds(speed, speed);
@@ -132,7 +150,7 @@ public class RobotAgent extends Agent {
     OneShotBehaviour follow_line_routine = new OneShotBehaviour() {
         @Override
         public void action() {
-            System.out.println("Starting behaviour: follow_line_routine");
+            //System.out.println("Starting behaviour: follow_line_routine");
             Delay.msDelay(100);
             //PID controlled line following behaviour
             try {
@@ -144,7 +162,7 @@ public class RobotAgent extends Agent {
                     Device.sync(20);
                     //controller.updateVal(sample);
                     int[] motorSpeedsReduction = colorPID.recalibrate(sample);
-                    System.out.println("\nGOT: " + sample + "" + "\nMotorspeeds:" + motorSpeedsReduction[0] + ", " + motorSpeedsReduction[1]);
+                    //System.out.println("\nGOT: " + sample + "" + "\nMotorspeeds:" + motorSpeedsReduction[0] + ", " + motorSpeedsReduction[1]);
                     //set device motor speeds to new values calculated by PID controller
                     Device.setMotorSpeeds(motorsFullSpeed-motorSpeedsReduction[0], motorsFullSpeed-motorSpeedsReduction[1]);
                     Device.startMoveForward();
@@ -168,20 +186,20 @@ public class RobotAgent extends Agent {
     OneShotBehaviour follow_line_routine_right = new OneShotBehaviour() {
         @Override
         public void action() {
-            System.out.println("Starting behaviour: follow_line_routine");
+            //System.out.println("Starting behaviour: follow_line_routine");
             Delay.msDelay(100);
             //PID controlled line following behaviour
             try {
                 // detect if robot is at a junction
                 atJunction = Device.sampleBackColor() == junctionColor;
                 if(!atJunction){
-                    System.out.println("+++++++++++++++Message sent++++++++++++++++++=");
+                    //System.out.println("+++++++++++++++Message sent++++++++++++++++++=");
                     //get light sensor reading from device
                     float sample = Device.sampleLightIntensity();
                     Device.sync(20);
                     //controller.updateVal(sample);
                     int[] motorSpeedsReduction = colorPID.recalibrate(sample);
-                    System.out.println("\nGOT: " + sample + "" + "\nMotorspeeds:" + motorSpeedsReduction[0] + ", " + motorSpeedsReduction[1]);
+                    //System.out.println("\nGOT: " + sample + "" + "\nMotorspeeds:" + motorSpeedsReduction[0] + ", " + motorSpeedsReduction[1]);
                     //set device motor speeds to new values calculated by PID controller
                     Device.setMotorSpeeds(motorsFullSpeed-motorSpeedsReduction[0], motorsFullSpeed-motorSpeedsReduction[1]);
                     Device.startMoveForward();
@@ -216,7 +234,7 @@ public class RobotAgent extends Agent {
             //TODO: add code for checking with front sensor.
             //behaviour for if back sensor reads junctionColor
             int sampledColor = Device.sampleBackColor();
-            System.out.println("Sampled colour: " + sampledColor);
+            //System.out.println("Sampled colour: " + sampledColor);
             if (sampledColor == junctionColor){
                 Device.stop();
                 atJunction = true;
@@ -230,7 +248,7 @@ public class RobotAgent extends Agent {
         @Override
         public void action() {
             // Keeps turning incrementally until the front sensor reads black
-            System.out.println("Starting behaviour: rotate_to_exit");
+            //System.out.println("Starting behaviour: rotate_to_exit");
             Device.stop();
             //TODO: update so that robot turns left or right according to next desired node.
             //if next exit is left, rotate left until front sensor reads black
@@ -242,7 +260,7 @@ public class RobotAgent extends Agent {
                 //Device.turnLeftInPlace(100);
                 Device.sync(20);
                 lightIntensity = Device.sampleLightIntensity();
-                System.out.println(lightIntensity);
+                //System.out.println(lightIntensity);
             }
             Device.stop();
             // reset the values for the colorPID
@@ -263,7 +281,7 @@ public class RobotAgent extends Agent {
         @Override
         public void action() {
             // Keeps turning incrementally until the front sensor reads black
-            System.out.println("Starting behaviour: rotate_to_exit");
+            //System.out.println("Starting behaviour: rotate_to_exit");
             Device.stop();
             //TODO: update so that robot turns left or right according to next desired node.
             //if next exit is left, rotate left until front sensor reads black
@@ -275,7 +293,7 @@ public class RobotAgent extends Agent {
                 //Device.turnLeftInPlace(100);
                 Device.sync(20);
                 lightIntensity = Device.sampleLightIntensity();
-                System.out.println(lightIntensity);
+                //System.out.println(lightIntensity);
             }
             Device.stop();
 
@@ -301,6 +319,7 @@ public class RobotAgent extends Agent {
         BEHAVIOUR DEFINITIONS
      */
 
+    /*
     // cyclicly check if there's an obstacle in front of the agent
     CyclicBehaviour obstacle_detection = new CyclicBehaviour() {
         @Override
@@ -315,19 +334,26 @@ public class RobotAgent extends Agent {
         }
     };
 
-    /*
-    // cyclicly check for obstacles
-    CyclicBehaviour obstacle_check = () -> {
-        try{
-            ultrasonic_front = Device.lookAhead_front();
-            ultrasonic_left = Device.lookAhead_left();
-            ultrasonic_right = Device.lookAhead_right();
-        }
-        catch(Exception e){
-            e.printStackTrace();
+     */
+
+    TickerBehaviour obstacle_detection = new TickerBehaviour(this, 200) {
+        @Override
+        protected void onTick() {
+            try{
+                int freeDistance = Device.sampleFrontDistance();
+                obstacleExists = freeDistance < obstacleDistanceThreshold;
+                if (obstacleExists){
+                    sendMessage();
+                }
+            }
+            catch(Exception e){
+                e.printStackTrace();
+            }
+
         }
     };
-     */
+
+
 
     /*
     OneShotBehaviour sendRot = new OneShotBehaviour() {
@@ -495,135 +521,6 @@ public class RobotAgent extends Agent {
     };
     */
 
-    /*
-    CyclicBehaviour message_recieve = new CyclicBehaviour() {
-        public void action() {
-            ACLMessage msg = receive();
-            if (msg != null) {
-                System.out.println(msg);
-
-                try {
-                    removeBehaviour(mission);
-                    addBehaviour(stop);
-
-                    String[] parsed_msg = msg.getContent().split(";");
-
-                    mission_type = parsed_msg[0];
-                    path = Arrays.asList(parsed_msg[1].split(",")).stream().map(String::trim).mapToInt(Integer::parseInt).toArray(); //new int[]{4800, 4800};
-                    pathIterator = 0;
-
-                    System.out.println(Arrays.toString(path));
-
-                    //Added
-                    // mission.addSubBehaviour(obstacle_detection);
-                    //  mission.addSubBehaviour(sendRot);
-
-                    //Added
-
-                    mission.addSubBehaviour(move);
-                    mission.addSubBehaviour(stop);
-                    mission.addSubBehaviour(wait);
-                    mission.addSubBehaviour(message_send);
-
-                    addBehaviour(mission);
-                } catch (Exception e) {
-                    System.out.println(e);
-                }
-            }
-            block();
-        }
-    };
-
-     */
-
-    /*
-    Behaviour move = new Behaviour() {
-        @Override
-        public void action() {
-            try {
-                int x = robotTag.getSmoothenedLocation(10).x;
-                int y = robotTag.getSmoothenedLocation(10).y;
-
-                if (x != 0 && y != 0) {
-                    int target_x = path[pathIterator];
-                    int target_y = path[pathIterator + 1];
-
-                    System.out.println("x: " + x);
-                    System.out.println("y: " + y);
-
-                    float yaw = (float) Math.toDegrees(robotTag.yaw);
-                    // yaw = (float) (yaw-301.5);
-                    System.out.println("yaw mission=" + yaw);
-
-                    double diff_y = target_y - y;
-                    double diff_x = target_x - x;
-
-                    System.out.println("diff_y=" + diff_y);
-                    System.out.println("diff_x=" + diff_x);
-
-
-                    double dist = Point2D.distance(x, y, target_x, target_y);
-
-                    //double atan2 =Math.atan2(diff_y, diff_x);
-
-                    //System.out.println("atan2="+atan2);
-
-                    //float target_angle = (float) Math.toDegrees(atan2); //??
-
-
-                    float target_angle = (float) Math.toDegrees(Math.atan2(y - target_y, target_x - x)); //??
-
-
-                    System.out.println("Target Angle" + target_angle);
-
-                    float diff_angle = target_angle - yaw;
-                    System.out.println("Diff Angle" + diff_angle);
-
-
-                    diff_angle = diff_angle % 360;
-                    while (diff_angle < 0) { //pretty sure this comparison is valid for doubles and floats
-                        diff_angle += 360.0;
-                    }
-
-                    System.out.println("- AFTER Diff Angle**" + diff_angle);
-
-
-                    if (Math.abs(target_x - x) < 100 && Math.abs(target_y - y) < 100) {    // old params diff_angle > 10 && diff_angle <= 180, diff_angle < 350 && diff_angle > 180
-                        pathIterator += 2;
-                    } else if (diff_angle > 10 && diff_angle <= 180) {
-                        Device.setSpeed(200);
-                        addBehaviour(turn_right);
-                        System.out.println("RIGHT");
-                    } else if (diff_angle < 350 && diff_angle > 180) {
-                        Device.setSpeed(200);
-                        addBehaviour(turn_left);
-                        System.out.println("LEFT");
-                    }
-//                    else if (obstacle) {
-//                        addBehaviour(stop);
-//                    }
-                    else {
-                        CutePuppies.Device.fuzzy_speed_distance(dist, yaw); // fuzzy_speed
-                        addBehaviour(go_forward);
-                        System.out.println("FORWARD");
-                    }
-
-
-                    //  block(5000);
-                }
-
-            } catch (Exception e) {
-                System.out.println(e);
-            }
-        }
-
-        @Override
-        public boolean done() {
-            return pathIterator >= path.length;
-        }
-    };
-
-     */
 
     Behaviour wait = new Behaviour() {
         Boolean waiting = true;
@@ -662,29 +559,6 @@ public class RobotAgent extends Agent {
     SequentialBehaviour mission = new SequentialBehaviour();
 
 
-    OneShotBehaviour avoid_obstacle = new OneShotBehaviour() {
-        @Override
-        public void action() {
-            try {
-                System.out.println("Following hardcoded square avoidance path...");
-                //Device.startMoveForward();
-                //Delay.msDelay(2000);
-                Device.stop();
-                Device.pivotLeftBy(90, 500);
-                Device.moveForward(2000);
-                Device.pivotRightBy(90, 500);
-                Device.moveForward(2000);
-                Device.pivotRightBy(90, 500);
-                Device.moveForward(2000);
-                Device.pivotLeftBy(90, 500);
-
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-    };
-
-
 
     OneShotBehaviour start_moving = new OneShotBehaviour() {
         @Override
@@ -701,13 +575,6 @@ public class RobotAgent extends Agent {
             }
         }
     };
-
-/*
-    public RobotAgent() throws MqttException {
-    }
-*/
-
-
 
 
 }
