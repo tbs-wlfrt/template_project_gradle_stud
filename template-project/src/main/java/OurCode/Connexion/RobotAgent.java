@@ -4,6 +4,7 @@ import OurCode.Devices.Device;
 import OurCode.Helpers.ColorPIDController;
 import OurCode.Helpers.ColorPIDController_copy;
 import OurCode.Helpers.PIDController;
+import UWB.mqtt.TagMqtt;
 import jade.core.AID;
 import jade.core.Agent;
 import jade.core.behaviours.*;
@@ -11,6 +12,11 @@ import jade.lang.acl.ACLMessage;
 import lejos.robotics.SampleProvider;
 import lejos.utility.Delay;
 import org.antlr.works.debugger.events.DBEventLocation;
+import org.eclipse.paho.client.mqttv3.MqttException;
+import OurCode.UWB.pozyx.TagIdMqtt;
+
+
+import java.util.concurrent.TimeUnit;
 
 import static jade.lang.acl.ACLMessage.INFORM;
 
@@ -36,20 +42,19 @@ public class RobotAgent extends Agent {
 
     String mission_type = ""; // the mission the agent has to complete
 
-    /*
-    static TagMqtt robotTag;
+
+
+    static TagIdMqtt tag;
 
     static {
         try {
-            robotTag = new TagMqtt("6841");
-        }
-        catch (MqttException e) {
+            tag = new TagIdMqtt("685C");
+            System.out.println("GOT HERE");
+        } catch (MqttException e) {
             e.printStackTrace();
         }
     }
 
-
-     */
 
     static int ultrasonic_front = 0;
     //static int ultrasonic_left = 0;
@@ -77,6 +82,7 @@ public class RobotAgent extends Agent {
         sendMessage();
         addBehaviour(init_message);
         addBehaviour(message_recieve);
+        addBehaviour(tck);
         //addBehaviour(follow_line_routine_right);
 
         //addBehaviour(follow_line_routine);
@@ -95,6 +101,20 @@ public class RobotAgent extends Agent {
         //  addBehaviour(tck);
         //    addBehaviour(turn_left);
     }
+
+
+    TickerBehaviour tck = new TickerBehaviour(this, 1000) {
+        @Override
+        protected void onTick() {
+            try {
+                TimeUnit.SECONDS.sleep(1);
+                System.out.println("tag.getLocation() = " + tag.getLocation());
+                System.out.println("tag.getOrientation() = " + tag.getOrientation());
+            } catch (Exception e) {
+                System.out.println(e);
+            }
+        }
+    };
 
     // oneshot behaviour that sends 1 message
     OneShotBehaviour init_message = new OneShotBehaviour() {
