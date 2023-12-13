@@ -33,6 +33,8 @@ public class RobotAgent extends Agent {
     int speedMultiplier = 40;
     int motorsFullSpeed = 150;
 
+    //float orientation;
+
     int junctionColor = 5;      //red
     Boolean atJunction = false;
 
@@ -110,6 +112,7 @@ public class RobotAgent extends Agent {
                 TimeUnit.SECONDS.sleep(1);
                 System.out.println("tag.getLocation() = " + tag.getLocation());
                 System.out.println("tag.getOrientation() = " + tag.getOrientation());
+                //orientation = tag.getOrientation();
             } catch (Exception e) {
                 System.out.println(e);
             }
@@ -170,7 +173,7 @@ public class RobotAgent extends Agent {
     OneShotBehaviour follow_line_routine = new OneShotBehaviour() {
         @Override
         public void action() {
-            //System.out.println("Starting behaviour: follow_line_routine");
+            System.out.println("Starting behaviour: follow_line_routine");
             Delay.msDelay(100);
             //PID controlled line following behaviour
             try {
@@ -363,7 +366,7 @@ public class RobotAgent extends Agent {
                 int freeDistance = Device.sampleFrontDistance();
                 obstacleExists = freeDistance < obstacleDistanceThreshold;
                 if (obstacleExists){
-                    sendMessage();
+                    sendMessage("OBSTACLE");
                 }
             }
             catch(Exception e){
@@ -427,6 +430,7 @@ public class RobotAgent extends Agent {
         @Override
         public void action() {
             try {
+                Device.setMotorSpeeds(motorsFullSpeed, motorsFullSpeed);
                 Device.moveForward(2000);
                 System.out.println("Forward");
             } catch (Exception e) {
