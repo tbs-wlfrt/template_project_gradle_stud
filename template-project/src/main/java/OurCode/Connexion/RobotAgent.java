@@ -44,6 +44,7 @@ public class RobotAgent extends Agent {
 
     String mission_type = ""; // the mission the agent has to complete
 
+    String currentPath = ""; // the current path the agent is taking
 
 
     static TagIdMqtt tag;
@@ -63,28 +64,17 @@ public class RobotAgent extends Agent {
     //static int ultrasonic_right = 0;
 
 
-    void sendMessage(){
-        /*
-        For the messaging:
-
-        1)ACLMessage messageTemplate = new ACLMessage(INFORM);
-        2)messageTemplate.addReceiver(new AID("AgentRobot@192.168.0.176:1099/JADE",AID.ISGUID));
-        3)messageTemplate.setContent("Main Sends Message ->");
-        4)send(messageTemplate);
-        */
-
-        // Send rot message
-        ACLMessage messageTemplate = new ACLMessage(INFORM);
-        messageTemplate.addReceiver(new AID(jadeApi,AID.ISGUID));
-        messageTemplate.setContent("YOU ARE ROTTEN");
-        send(messageTemplate);
-    }
     protected void setup() {
 
-        sendMessage();
-        addBehaviour(init_message);
         addBehaviour(message_recieve);
+
+        addBehaviour(init_message);
+
+        addBehaviour(askNextCrate); // ask for initial location of crate
+        addBehaviour(follow_line_routine);
+
         addBehaviour(tck);
+
         //addBehaviour(follow_line_routine_right);
 
         //addBehaviour(follow_line_routine);
@@ -104,6 +94,31 @@ public class RobotAgent extends Agent {
         //    addBehaviour(turn_left);
     }
 
+    void sendMessage(String message){
+        /*
+        For the messaging:
+
+        1)ACLMessage messageTemplate = new ACLMessage(INFORM);
+        2)messageTemplate.addReceiver(new AID("AgentRobot@192.168.0.176:1099/JADE",AID.ISGUID));
+        3)messageTemplate.setContent("Main Sends Message ->");
+        4)send(messageTemplate);
+        */
+
+        // Send rot message
+        ACLMessage messageTemplate = new ACLMessage(INFORM);
+        messageTemplate.addReceiver(new AID(jadeApi,AID.ISGUID));
+        //messageTemplate.addReceiver(new AID(jadeApi,AID.ISLOCALNAME));
+        messageTemplate.setContent(message);
+        send(messageTemplate);
+    }
+
+    OneShotBehaviour askNextCrate = new OneShotBehaviour() {
+        @Override
+        public void action() {
+            System.out.println("ASKING FOR CRATE PATH");
+            sendMessage("NEXT_CRATE");
+        }
+    };
 
     TickerBehaviour tck = new TickerBehaviour(this, 1000) {
         @Override
@@ -130,15 +145,14 @@ public class RobotAgent extends Agent {
         }
     };
 
-    // message receiver
-    TickerBehaviour message_recieve = new TickerBehaviour(this, 200) {
-        @Override
-        protected void onTick() {
+    TickerBehaviour message_recieve = new TickerBehaviour(this, 1000) {
+        public void onTick() {
             ACLMessage msg = receive();
             if (msg != null) {
-                System.out.println("ROBOT Received: " + msg.getContent());
-                //TODO: insert logic for what to do when message recieved
-                //cases: if msg.content starts with "path" - update new path to follow
+                System.out.println("Message recieved at RobotAgent: " + msg.getContent());
+                //TODO: insert logic for reacting to messages
+                // Robot only recves paths
+                currentPath = msg.getContent();
             }
         }
     };
@@ -161,9 +175,6 @@ public class RobotAgent extends Agent {
 
             distancePID.updateVals(distance);
             int speed = (int) Math.min(distancePID.recalibrate()*speedMultiplier, 1000);
-            //System.out.println("speed: " + speed);
-
-            //System.out.println("Speed: " + speed);
             Device.setMotorSpeeds(speed, speed);
             Device.startMoveForward();
         }
@@ -206,6 +217,7 @@ public class RobotAgent extends Agent {
 
     };
 
+    /*
     OneShotBehaviour follow_line_routine_right = new OneShotBehaviour() {
         @Override
         public void action() {
@@ -241,7 +253,7 @@ public class RobotAgent extends Agent {
             return super.onEnd();
         }
     };
-
+    */
 
     //checks if the robot is currently over a junction (with either of the color sensors)
     TickerBehaviour check_junction = new TickerBehaviour(this, 100) {
@@ -266,31 +278,112 @@ public class RobotAgent extends Agent {
         }
     };
 
+
     //behaviour used when the robot is currently at a junction (node) and needs to turn to its exit
     OneShotBehaviour rotate_to_exit = new OneShotBehaviour() {
         @Override
         public void action() {
-            // Keeps turning incrementally until the front sensor reads black
-            //System.out.println("Starting behaviour: rotate_to_exit");
-            Device.stop();
-            //TODO: update so that robot turns left or right according to next desired node.
-            //if next exit is left, rotate left until front sensor reads black
+            System.out.println("Starting behaviour: rotate_to_exit");
+            // turn device based on the current path
             float lightIntensity = 100;
-            Device.turnLeftInPlace(60); // defines the speed of the turn
-            Device.startTurnLeft(motorsFullSpeed/4);
+            float startOri = tag.getOrientation();
+            float targetOri = 0;
+            switch (currentPath.charAt(0)){
+                case 'F':
+                    return;
+                case 'L':
+                    System.out.println("Turning Left");
+
+                    //Device.turnLeftInPlace(60); // defines the speed of the turn
+                    Device.startTurnLeft(motorsFullSpeed/4);
+                    targetOri = (startOri - (float)Math.PI/2);
+
+                    break;
+                case 'R':
+                    System.out.println("Turning Right");
+                    //Device.turnRightInPlace(60); // defines the speed of the turn
+                    Device.startTurnRight(motorsFullSpeed/4);
+                    targetOri = (startOri + (float)Math.PI/2) % (2*(float)Math.PI);
+                    break;
+            }
+            if(targetOri < 0){
+                targetOri = targetOri + (float)Math.PI * 2;
+            }
             // check if it's between full black and set point
+            /*
             while (!(colorPID.fullBlack <= lightIntensity && lightIntensity < (colorPID.setPoint+5))){
                 //Device.turnLeftInPlace(100);
                 Device.sync(20);
                 lightIntensity = Device.sampleLightIntensity();
                 //System.out.println(lightIntensity);
             }
+            */
+            float startOriDeg = (float) Math.toDegrees(startOri);
+            float tagOriDeg = (float) Math.toDegrees(tag.getOrientation());
+            float tagOri = tag.getOrientation();
+            System.out.println("Start Orientation: " +startOri);
+            System.out.println("target Orientation: " +targetOri);
+
+            boolean colCheck = true;
+            boolean oriCheck = true;
+
+            Device.sync(500);
+            // given startOriDeg and tagOriDeg; keep turning until 90 degrees has been turned
+            while(oriCheck && colCheck){         //threshold of error for turning (within 10 degrees)
+                Device.sync();
+                oriCheck = !(Math.abs(tagOri - targetOri) < 0.17);
+                lightIntensity = Device.sampleLightIntensity();
+                colCheck = !(colorPID.fullBlack <= lightIntensity && lightIntensity < (colorPID.setPoint+5));
+
+                tagOri = tag.getOrientation();
+                System.out.println("Orientation: " +tagOri);
+
+            }
+
+            /*
+            while(Math.abs(startOri - tagOri) < Math.PI / 2 || Math.abs(startOri - tagOri) > 3 * Math.PI / 2) {
+                // Code to turn goes here
+                // Update tagOri after turning
+                tagOri = tag.getOrientation();
+            }
+
+            float tolerance = 0.0873f; // 5 degrees in radians
+
+            // given startOri and tagOri; keep turning until 90 degrees (pi/2 radians) or -90 degrees (3*pi/2 radians) has been turned
+            while(Math.abs(startOri - tagOri) < Math.PI / 2 - tolerance || Math.abs(startOri - tagOri) > 3 * Math.PI / 2 + tolerance) {
+                // Code to turn goes here
+                // Update tagOri after turning
+                tagOri = tag.getOrientation();
+            }
+            */
+
+            /*
+            float tolerance = 0.0873f; // 5 degrees in radians
+
+            // given startOri and tagOri; keep turning until 90 degrees (pi/2 radians) or -90 degrees (3*pi/2 radians) has been turned
+            while(Math.abs(startOri - tagOri) < Math.PI / 2 - tolerance || Math.abs(startOri - tagOri) > 3 * Math.PI / 2 + tolerance) {
+                // Code to turn goes here
+                // Update tagOri after turning
+                tagOri = tag.getOrientation();
+            }
+
+             */
+
             Device.stop();
+
             // reset the values for the colorPID
             colorPID.resetValsOnTurn();
         }
 
         public int onEnd() {
+            // pop first character of next path
+            currentPath = currentPath.substring(1);
+
+            // check if current path is empty, if so send a message to ask for NEXT_PATH
+            if (currentPath.length() == 0){
+                addBehaviour(askNextCrate); // ask for next location of crate
+            }
+
             atJunction = false;
             addBehaviour(go_forward);
             addBehaviour(follow_line_routine);
@@ -299,6 +392,7 @@ public class RobotAgent extends Agent {
         }
     };
 
+    /*
     //behaviour used when the robot is currently at a junction (node) and needs to turn to its exit
     OneShotBehaviour rotate_right_to_exit = new OneShotBehaviour() {
         @Override
@@ -337,6 +431,7 @@ public class RobotAgent extends Agent {
             return super.onEnd();
         }
     };
+    */
 
     /*
         BEHAVIOUR DEFINITIONS
@@ -490,6 +585,7 @@ public class RobotAgent extends Agent {
             }
         }
     };
+/*
 
 
     OneShotBehaviour init_message = new OneShotBehaviour() {
@@ -501,7 +597,6 @@ public class RobotAgent extends Agent {
                 messageTemplate.setContent("start");
                 send(messageTemplate);
 
-/*
              while (true){
                 int x = tag.getSmoothenedLocation(10).x;
                 int y = tag.getSmoothenedLocation(10).y;
@@ -511,14 +606,12 @@ public class RobotAgent extends Agent {
                   Thread.sleep(1000);
                 }
 
-                */
-
-
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
     };
+                */
 
     /*
     TickerBehaviour tck = new TickerBehaviour(this, 1000) {

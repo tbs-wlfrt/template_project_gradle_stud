@@ -22,12 +22,11 @@ public class TagMqtt {
     private final String password = "1d761f94-6fe7-4549-aaa5-73a4ffecc2ee";
 
     // Address of pozyx broker on server PC
-//    private final String host = "tcp://
-//    .168.0.105:1883";
+//    private final String host = "tcp://168.0.105:1883";
 
     // address of pozyx broker local
-//    private final String host = "tcp://localhost:1883";
-//    private final String topic = "tags";
+    //private final String host = "tcp://localhost:1883";
+    //private final String topic = "tags";
 
 
     private final MqttClient client;
@@ -67,6 +66,7 @@ public class TagMqtt {
     public boolean isNewMessage() {
         return new_message;
     }
+
 
     public Point2D getSmoothenedLocation(int window) {
         new_message = false;

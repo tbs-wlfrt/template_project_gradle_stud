@@ -10,6 +10,9 @@ import java.util.Objects;
 
 
 public class Agent1 extends Agent {
+    String RobotAgentAPI = "RobotAgent@192.168.0.158:1099/JADE";
+
+    //String RobotAgentAPI = "RobotAgent";
     @Override
     protected void setup() {
         System.out.println("local name" + getAID().getLocalName());

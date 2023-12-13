@@ -14,8 +14,8 @@ public class TestContainer {
         try {
             Runtime runtime = Runtime.instance();
 
-            String source = "192.168.0.111";
-            String target = "192.168.0.158";
+            String source = "192.168.0.111"; // ROBOT
+            String target = "192.168.0.158"; // JADE
             ProfileImpl p = new ProfileImpl(target, 1099, null, false);
 
             p.setParameter(Profile.LOCAL_HOST, source);
