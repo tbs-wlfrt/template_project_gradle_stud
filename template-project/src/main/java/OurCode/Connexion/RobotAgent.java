@@ -207,8 +207,11 @@ public class RobotAgent extends Agent {
             try {
                 // detect if robot is at a junction
                 atJunction = Device.sampleBackColor() == junctionColor;
+                if (currentPath.isEmpty()){
+                    Device.stop();
+                }
                 //atCharging = (Device.sampleBackColor() == chargingColor1) || (Device.sampleBackColor() == chargingColor2);
-                if((!atJunction) && (!atCharging)){
+                else if((!atJunction) && (!atCharging)){
                     //get light sensor reading from device
                     float sample = Device.sampleLightIntensity();
                     Device.sync(20);
@@ -360,7 +363,7 @@ public class RobotAgent extends Agent {
 
                 //if stopping due to edge detection, keep rotating a little further to stop on middle of line
                 if (!colCheck){
-                    Device.sync(50);
+                    Device.sync(40);
                 }
 
 
@@ -377,9 +380,9 @@ public class RobotAgent extends Agent {
             currentPath = currentPath.substring(1);
 
             // check if current path is empty, if so send a message to ask for NEXT_PATH
-            if (currentPath.length() == 0){
-                addBehaviour(askNextCrate); // ask for next location of crate
-            }
+//            if (currentPath.length() == 0){
+//                addBehaviour(askNextCrate); // ask for next location of crate
+//            }
 
             atJunction = false;
             atCharging = false;
@@ -524,7 +527,7 @@ public class RobotAgent extends Agent {
         public void action() {
             try {
                 Device.setMotorSpeeds(motorsFullSpeed, motorsFullSpeed);
-                Device.moveForward(2000);
+                Device.moveForward(1000);
                 System.out.println("Forward");
             } catch (Exception e) {
                 e.printStackTrace();

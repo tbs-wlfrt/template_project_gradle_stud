@@ -20,7 +20,7 @@ public class ColorPIDController_copy {
         to a higher value so that it reacts more to the current error
     */
     // Sensitivity to the current measurement
-    double kp = 0.65; // 3.60F; // 1.6F; // try 1.6
+    double kp = 0.85;//0.65; // 3.60F; // 1.6F; // try 1.6
     double ki = 0.00001F;
     double kd = 3.2; // 20.2F; // 3.2F;
 
