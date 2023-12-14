@@ -48,7 +48,7 @@ public class Agent1 extends Agent {
                         break;
                     case "NEXT_CRATE":
                         System.out.println("Robot dropped off crate, calculating path to next crate...");
-                        String robotPath = "RRR";
+                        String robotPath = "LLLLBRRRRB";
                         send_message(robotPath);
                         break;
 

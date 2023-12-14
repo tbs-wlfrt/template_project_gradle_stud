@@ -3,7 +3,9 @@ package OurCode.Connexion;
 import OurCode.Devices.Device;
 import OurCode.Helpers.ColorPIDController;
 import OurCode.Helpers.ColorPIDController_copy;
+import OurCode.Helpers.LocationMessageParser;
 import OurCode.Helpers.PIDController;
+import OurCode.UWB.helpers.Point2D;
 import UWB.mqtt.TagMqtt;
 import jade.core.AID;
 import jade.core.Agent;
@@ -11,6 +13,7 @@ import jade.core.behaviours.*;
 import jade.lang.acl.ACLMessage;
 import lejos.robotics.SampleProvider;
 import lejos.utility.Delay;
+import org.antlr.stringtemplate.StringTemplateGroup;
 import org.antlr.works.debugger.events.DBEventLocation;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import OurCode.UWB.pozyx.TagIdMqtt;
@@ -27,6 +30,7 @@ public class RobotAgent extends Agent {
     boolean obstacleExists = false; // whether the agent is an obstacle or not
     int obstacleDistanceThreshold = 25; // the maximum acceptable distance required between the agent and the obstacle
     boolean onMission = false;
+    float steerCorrection = 0.0873f;
 
     ColorPIDController_copy colorPID = new ColorPIDController_copy(50);
     PIDController distancePID = new PIDController(50);
@@ -36,7 +40,12 @@ public class RobotAgent extends Agent {
     //float orientation;
 
     int junctionColor = 5;      //red
+    int chargingColor1 = 2;      //blue
+    int chargingColor2 = 3;      //blue
+
+
     Boolean atJunction = false;
+    Boolean atCharging = false;
 
     String jadeApi = "Agent1@192.168.0.158:1099/JADE";
     //String jadeApi = "Agent1";
@@ -48,10 +57,12 @@ public class RobotAgent extends Agent {
 
 
     static TagIdMqtt tag;
+    static String tagID = "685C";
+
 
     static {
         try {
-            tag = new TagIdMqtt("685C");
+            tag = new TagIdMqtt(tagID);
             System.out.println("GOT HERE");
         } catch (MqttException e) {
             e.printStackTrace();
@@ -66,14 +77,14 @@ public class RobotAgent extends Agent {
 
     protected void setup() {
 
-        addBehaviour(message_recieve);
+        addBehaviour(message_recieve); // ticker
 
         addBehaviour(init_message);
 
         addBehaviour(askNextCrate); // ask for initial location of crate
         addBehaviour(follow_line_routine);
 
-        addBehaviour(tck);
+//        addBehaviour(tck); //
 
         //addBehaviour(follow_line_routine_right);
 
@@ -120,14 +131,20 @@ public class RobotAgent extends Agent {
         }
     };
 
+    //every 1s sends the location info to the central monitor
     TickerBehaviour tck = new TickerBehaviour(this, 1000) {
         @Override
         protected void onTick() {
             try {
-                TimeUnit.SECONDS.sleep(1);
-                System.out.println("tag.getLocation() = " + tag.getLocation());
-                System.out.println("tag.getOrientation() = " + tag.getOrientation());
+                //TimeUnit.SECONDS.sleep(1);
+                //System.out.println("tag.getLocation() = " + tag.getLocation());
+                //System.out.println("tag.getOrientation() = " + tag.getOrientation());
+                System.out.println("Sampled colour: " + Device.sampleBackColor());
+                Point2D loc = tag.getLocation();
                 //orientation = tag.getOrientation();
+                String info = LocationMessageParser.info_to_string(loc.x, loc.y, tag.getOrientation());
+                sendMessage(info);
+
             } catch (Exception e) {
                 System.out.println(e);
             }
@@ -140,7 +157,7 @@ public class RobotAgent extends Agent {
         public void action() {
             ACLMessage messageTemplate = new ACLMessage(INFORM);
             messageTemplate.addReceiver(new AID(jadeApi,AID.ISGUID));
-            messageTemplate.setContent("1st Message");
+            messageTemplate.setContent("start_up,"+tagID);
             send(messageTemplate);
         }
     };
@@ -190,7 +207,8 @@ public class RobotAgent extends Agent {
             try {
                 // detect if robot is at a junction
                 atJunction = Device.sampleBackColor() == junctionColor;
-                if(!atJunction){
+                //atCharging = (Device.sampleBackColor() == chargingColor1) || (Device.sampleBackColor() == chargingColor2);
+                if((!atJunction) && (!atCharging)){
                     //get light sensor reading from device
                     float sample = Device.sampleLightIntensity();
                     Device.sync(20);
@@ -208,7 +226,7 @@ public class RobotAgent extends Agent {
 
         @Override
         public int onEnd() {
-            if (!atJunction)
+            if ((!atJunction) && (!atCharging))
                 addBehaviour(follow_line_routine);
             else
                 addBehaviour(rotate_to_exit);
@@ -284,90 +302,69 @@ public class RobotAgent extends Agent {
         @Override
         public void action() {
             System.out.println("Starting behaviour: rotate_to_exit");
+            System.out.println("atJunction: " + atJunction);
+            System.out.println("atCharging: " + atCharging);
+            System.out.println("detected Colour: " + Device.sampleBackColor());
+
+
             // turn device based on the current path
-            float lightIntensity = 100;
+            float lightIntensity;
             float startOri = tag.getOrientation();
             float targetOri = 0;
+            if(currentPath.isEmpty()){
+                currentPath = "X";
+            }
             switch (currentPath.charAt(0)){
-                case 'F':
-                    return;
                 case 'L':
                     System.out.println("Turning Left");
-
-                    //Device.turnLeftInPlace(60); // defines the speed of the turn
                     Device.startTurnLeft(motorsFullSpeed/4);
-                    targetOri = (startOri - (float)Math.PI/2);
+                    targetOri = (startOri - (float)Math.PI/2) - steerCorrection;
 
                     break;
                 case 'R':
                     System.out.println("Turning Right");
-                    //Device.turnRightInPlace(60); // defines the speed of the turn
                     Device.startTurnRight(motorsFullSpeed/4);
-                    targetOri = (startOri + (float)Math.PI/2) % (2*(float)Math.PI);
+                    targetOri = (startOri + ((float)Math.PI/2) + steerCorrection) % (2*(float)Math.PI);
+                    break;
+                case 'B':
+                    System.out.println("Turning 180 degrees");
+                    Device.startTurnLeft(motorsFullSpeed/4);
+                    targetOri = (startOri + (float)Math.PI) - steerCorrection % (2*(float)Math.PI);
+                    break;
+                default:
                     break;
             }
-            if(targetOri < 0){
-                targetOri = targetOri + (float)Math.PI * 2;
-            }
-            // check if it's between full black and set point
-            /*
-            while (!(colorPID.fullBlack <= lightIntensity && lightIntensity < (colorPID.setPoint+5))){
-                //Device.turnLeftInPlace(100);
-                Device.sync(20);
-                lightIntensity = Device.sampleLightIntensity();
-                //System.out.println(lightIntensity);
-            }
-            */
-            float startOriDeg = (float) Math.toDegrees(startOri);
-            float tagOriDeg = (float) Math.toDegrees(tag.getOrientation());
-            float tagOri = tag.getOrientation();
-            System.out.println("Start Orientation: " +startOri);
-            System.out.println("target Orientation: " +targetOri);
 
-            boolean colCheck = true;
-            boolean oriCheck = true;
+            if(!(currentPath.charAt(0) == 'F')){
+                if(targetOri < 0){
+                    targetOri = targetOri + (float)Math.PI * 2;
+                }
 
-            Device.sync(500);
-            // given startOriDeg and tagOriDeg; keep turning until 90 degrees has been turned
-            while(oriCheck && colCheck){         //threshold of error for turning (within 10 degrees)
-                Device.sync();
-                oriCheck = !(Math.abs(tagOri - targetOri) < 0.17);
-                lightIntensity = Device.sampleLightIntensity();
-                colCheck = !(colorPID.fullBlack <= lightIntensity && lightIntensity < (colorPID.setPoint+5));
+                float tagOri = tag.getOrientation();
+                System.out.println("Start Orientation: " +startOri);
+                System.out.println("target Orientation: " +targetOri);
 
-                tagOri = tag.getOrientation();
-                System.out.println("Orientation: " +tagOri);
+                boolean colCheck = true;
+                boolean oriCheck = true;
+
+                Device.sync(500);
+                // given startOriDeg and tagOriDeg; keep turning until 90 degrees has been turned
+                while(oriCheck && colCheck){         //threshold of error for turning (within 10 degrees)
+                    Device.sync();
+                    oriCheck = !(Math.abs(tagOri - targetOri) < 0.17);
+                    lightIntensity = Device.sampleLightIntensity();
+                    colCheck = !(colorPID.fullBlack <= lightIntensity && lightIntensity < (colorPID.setPoint+5));
+
+                    tagOri = tag.getOrientation();
+                }
+
+                //if stopping due to edge detection, keep rotating a little further to stop on middle of line
+                if (!colCheck){
+                    Device.sync(50);
+                }
+
 
             }
-
-            /*
-            while(Math.abs(startOri - tagOri) < Math.PI / 2 || Math.abs(startOri - tagOri) > 3 * Math.PI / 2) {
-                // Code to turn goes here
-                // Update tagOri after turning
-                tagOri = tag.getOrientation();
-            }
-
-            float tolerance = 0.0873f; // 5 degrees in radians
-
-            // given startOri and tagOri; keep turning until 90 degrees (pi/2 radians) or -90 degrees (3*pi/2 radians) has been turned
-            while(Math.abs(startOri - tagOri) < Math.PI / 2 - tolerance || Math.abs(startOri - tagOri) > 3 * Math.PI / 2 + tolerance) {
-                // Code to turn goes here
-                // Update tagOri after turning
-                tagOri = tag.getOrientation();
-            }
-            */
-
-            /*
-            float tolerance = 0.0873f; // 5 degrees in radians
-
-            // given startOri and tagOri; keep turning until 90 degrees (pi/2 radians) or -90 degrees (3*pi/2 radians) has been turned
-            while(Math.abs(startOri - tagOri) < Math.PI / 2 - tolerance || Math.abs(startOri - tagOri) > 3 * Math.PI / 2 + tolerance) {
-                // Code to turn goes here
-                // Update tagOri after turning
-                tagOri = tag.getOrientation();
-            }
-
-             */
 
             Device.stop();
 
@@ -385,6 +382,7 @@ public class RobotAgent extends Agent {
             }
 
             atJunction = false;
+            atCharging = false;
             addBehaviour(go_forward);
             addBehaviour(follow_line_routine);
             //TODO: insert section that makes sure we dont think we are at a different junction becasue we havent moved
