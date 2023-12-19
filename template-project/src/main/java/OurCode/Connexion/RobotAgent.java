@@ -30,7 +30,7 @@ public class RobotAgent extends Agent {
     boolean obstacleExists = false; // whether the agent is an obstacle or not
     int obstacleDistanceThreshold = 25; // the maximum acceptable distance required between the agent and the obstacle
     boolean onMission = false;
-    float steerCorrection = 0.0873f;
+    float steerCorrection = 0.07f;//0.08f;
 
     ColorPIDController_copy colorPID = new ColorPIDController_copy(50);
     PIDController distancePID = new PIDController(50);
@@ -46,20 +46,24 @@ public class RobotAgent extends Agent {
 
     Boolean atJunction = false;
     Boolean atCharging = false;
+    Boolean obstacleDetected = false;
+    float obstacleDist = 15;
 
     String jadeApi = "Agent1@192.168.0.158:1099/JADE";
     //String jadeApi = "Agent1";
+    // Robot of other group
+    String subscriberAPI = "ControlCenterAgent@192.168.0.159:1099/JADE";
+
+
+
 
 
     String mission_type = ""; // the mission the agent has to complete
 
     String currentPath = ""; // the current path the agent is taking
 
-
-    static TagIdMqtt tag;
     static String tagID = "685C";
-
-
+    static TagIdMqtt tag;
     static {
         try {
             tag = new TagIdMqtt(tagID);
@@ -79,7 +83,7 @@ public class RobotAgent extends Agent {
 
         addBehaviour(message_recieve); // ticker
 
-        addBehaviour(init_message);
+        //addBehaviour(init_message);
 
         addBehaviour(askNextCrate); // ask for initial location of crate
         addBehaviour(follow_line_routine);
@@ -123,6 +127,34 @@ public class RobotAgent extends Agent {
         send(messageTemplate);
     }
 
+    void sendLocationToSubscribers(){
+        /*
+        For the messaging:
+
+        1)ACLMessage messageTemplate = new ACLMessage(INFORM);
+        2)messageTemplate.addReceiver(new AID("AgentRobot@192.168.0.176:1099/JADE",AID.ISGUID));
+        3)messageTemplate.setContent("Main Sends Message ->");
+        4)send(messageTemplate);
+        */
+
+        ACLMessage messageTemplate = new ACLMessage(INFORM);
+        messageTemplate.addReceiver(new AID(subscriberAPI,AID.ISGUID));
+        //messageTemplate.addReceiver(new AID(jadeApi,AID.ISLOCALNAME));
+
+
+        // send message to subscribers
+        Point2D loc = tag.getLocation();
+        //orientation = tag.getOrientation();
+        String info = LocationMessageParser.info_to_string(loc.x, loc.y, tag.getOrientation());
+        sendMessage(info);
+
+        messageTemplate.setContent(info);
+        send(messageTemplate);
+    }
+
+
+
+
     OneShotBehaviour askNextCrate = new OneShotBehaviour() {
         @Override
         public void action() {
@@ -151,18 +183,11 @@ public class RobotAgent extends Agent {
         }
     };
 
-    // oneshot behaviour that sends 1 message
-    OneShotBehaviour init_message = new OneShotBehaviour() {
-        @Override
-        public void action() {
-            ACLMessage messageTemplate = new ACLMessage(INFORM);
-            messageTemplate.addReceiver(new AID(jadeApi,AID.ISGUID));
-            messageTemplate.setContent("start_up,"+tagID);
-            send(messageTemplate);
-        }
-    };
+
 
     TickerBehaviour message_recieve = new TickerBehaviour(this, 1000) {
+        // receives message from our controller
+        // sends location to subscribers
         public void onTick() {
             ACLMessage msg = receive();
             if (msg != null) {
@@ -171,6 +196,7 @@ public class RobotAgent extends Agent {
                 // Robot only recves paths
                 currentPath = msg.getContent();
             }
+
         }
     };
 
@@ -207,10 +233,19 @@ public class RobotAgent extends Agent {
             try {
                 // detect if robot is at a junction
                 atJunction = Device.sampleBackColor() == junctionColor;
+
+                float frontDist = Device.sampleFrontDistance();
+                System.out.println("Front dist:" + frontDist);
+                obstacleDetected = 0 < frontDist && frontDist < obstacleDist;
+
                 if (currentPath.isEmpty()){
                     Device.stop();
                 }
                 //atCharging = (Device.sampleBackColor() == chargingColor1) || (Device.sampleBackColor() == chargingColor2);
+                else if (obstacleDetected){
+                    Device.stop();
+                }
+
                 else if((!atJunction) && (!atCharging)){
                     //get light sensor reading from device
                     float sample = Device.sampleLightIntensity();
@@ -229,7 +264,11 @@ public class RobotAgent extends Agent {
 
         @Override
         public int onEnd() {
-            if ((!atJunction) && (!atCharging))
+            if (obstacleDetected){
+                sendMessage("OBSTACLE");
+                addBehaviour(avoid_obstacle);
+            }
+            else if ((!atJunction) && (!atCharging))
                 addBehaviour(follow_line_routine);
             else
                 addBehaviour(rotate_to_exit);
@@ -308,8 +347,14 @@ public class RobotAgent extends Agent {
             System.out.println("atJunction: " + atJunction);
             System.out.println("atCharging: " + atCharging);
             System.out.println("detected Colour: " + Device.sampleBackColor());
-
-
+            Device.stop();
+            try {
+                tag = new TagIdMqtt(tagID);
+                System.out.println("GOT HERE");
+            } catch (MqttException e) {
+                e.printStackTrace();
+            }
+            block(100);
             // turn device based on the current path
             float lightIntensity;
             float startOri = tag.getOrientation();
@@ -321,18 +366,18 @@ public class RobotAgent extends Agent {
                 case 'L':
                     System.out.println("Turning Left");
                     Device.startTurnLeft(motorsFullSpeed/4);
-                    targetOri = (startOri - (float)Math.PI/2) - steerCorrection;
+                    targetOri = (startOri - ((float)Math.PI/2)) - (steerCorrection*10);
 
                     break;
                 case 'R':
                     System.out.println("Turning Right");
                     Device.startTurnRight(motorsFullSpeed/4);
-                    targetOri = (startOri + ((float)Math.PI/2) + steerCorrection) % (2*(float)Math.PI);
+                    targetOri = (startOri + ((float)Math.PI/2) - steerCorrection) % (2*(float)Math.PI);
                     break;
                 case 'B':
                     System.out.println("Turning 180 degrees");
                     Device.startTurnLeft(motorsFullSpeed/4);
-                    targetOri = (startOri + (float)Math.PI) - steerCorrection % (2*(float)Math.PI);
+                    targetOri = (startOri + (float)Math.PI) + (steerCorrection*2) % (2*(float)Math.PI);
                     break;
                 default:
                     break;
@@ -350,7 +395,8 @@ public class RobotAgent extends Agent {
                 boolean colCheck = true;
                 boolean oriCheck = true;
 
-                Device.sync(500);
+                Device.sync(400);
+
                 // given startOriDeg and tagOriDeg; keep turning until 90 degrees has been turned
                 while(oriCheck && colCheck){         //threshold of error for turning (within 10 degrees)
                     Device.sync();
@@ -359,10 +405,12 @@ public class RobotAgent extends Agent {
                     colCheck = !(colorPID.fullBlack <= lightIntensity && lightIntensity < (colorPID.setPoint+5));
 
                     tagOri = tag.getOrientation();
+                    System.out.println("light intensity:" + lightIntensity);
                 }
+                System.out.println("colCheck: " + colCheck + "    oriCheck: " + oriCheck);
 
                 //if stopping due to edge detection, keep rotating a little further to stop on middle of line
-                if (!colCheck){
+                if ((!colCheck) && (currentPath.charAt(0) == 'L')){
                     Device.sync(40);
                 }
 
@@ -386,6 +434,7 @@ public class RobotAgent extends Agent {
 
             atJunction = false;
             atCharging = false;
+            // TODO: RE ADD THIS CHRISTOPHER NOLAN
             addBehaviour(go_forward);
             addBehaviour(follow_line_routine);
             //TODO: insert section that makes sure we dont think we are at a different junction becasue we havent moved
@@ -527,7 +576,7 @@ public class RobotAgent extends Agent {
         public void action() {
             try {
                 Device.setMotorSpeeds(motorsFullSpeed, motorsFullSpeed);
-                Device.moveForward(1000);
+                Device.moveForward(850);
                 System.out.println("Forward");
             } catch (Exception e) {
                 e.printStackTrace();
@@ -691,6 +740,47 @@ public class RobotAgent extends Agent {
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        }
+    };
+
+    OneShotBehaviour avoid_obstacle = new OneShotBehaviour() {
+        @Override
+        public void action() {
+            try {
+                System.out.println("Avoiding obstacle");
+                String response = "";
+                ACLMessage msg;
+
+                // sleep for 1 second
+                block(1000);
+
+                // try receiving message otherwise add avoid obstacle behaviour
+                try {
+                    msg = receive();
+                    response = msg.getContent();
+                    if(response.equals("WAIT")){
+                        Device.sync(50);
+                        addBehaviour(follow_line_routine);
+                    }
+                    else{
+                        currentPath = response;
+                        //follow new path
+                        addBehaviour(rotate_to_exit);
+                    }
+                } catch (Exception e) {
+                    addBehaviour(avoid_obstacle);
+                    // step out of this behaviour
+                }
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        @Override
+        public int onEnd() {
+            obstacleDetected = false;
+            return super.onEnd();
         }
     };
 

@@ -21,11 +21,13 @@ public class TestContainer {
             p.setParameter(Profile.LOCAL_HOST, source);
             p.setParameter(Profile.LOCAL_PORT,"1099");
 
+
             AgentContainer agentContainer = runtime.createAgentContainer(p);
             TestContainer.start();
 
             System.out.println("RobotAgent");
             AgentController robotAgent = agentContainer.createNewAgent("RobotAgent", "OurCode.Connexion.RobotAgent", new Object[]{});
+//            AgentController robotAgent = agentContainer.createNewAgent("1", "OurCode.Connexion.RobotAgent", new Object[]{});
 
             System.out.println("Starting...");
             robotAgent.start();
