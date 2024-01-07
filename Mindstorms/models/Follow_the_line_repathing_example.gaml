@@ -69,14 +69,14 @@ global {
 		// Calculate the weight based on the length of the edges so that the robot moves the same speed everywhere.
 		// movement_graph <- movement_graph with_weights (movement_graph.edges as_map (each:: geometry(each).perimeter));
 		edge_weights <- [
-			geometry(movement_graph.edges at 0).perimeter*0.5, // To make one robot faster than the other
-			geometry(movement_graph.edges at 1).perimeter*2,
-			geometry(movement_graph.edges at 2).perimeter*2,
+			geometry(movement_graph.edges at 0).perimeter, //*0.5, // To make one robot faster than the other
+			geometry(movement_graph.edges at 1).perimeter, //*2,
+			geometry(movement_graph.edges at 2).perimeter, //*2,
 			geometry(movement_graph.edges at 3).perimeter,
-			geometry(movement_graph.edges at 4).perimeter*1.5, // TODO to avoid going to the triage point for now
-			geometry(movement_graph.edges at 5).perimeter*1.5,
-			geometry(movement_graph.edges at 6).perimeter*1.5,
-			geometry(movement_graph.edges at 7).perimeter*1.5,
+			geometry(movement_graph.edges at 4).perimeter, //*1.5, // TODO to avoid going to the triage point for now
+			geometry(movement_graph.edges at 5).perimeter, //*1.5,
+			geometry(movement_graph.edges at 6).perimeter, //*1.5,
+			geometry(movement_graph.edges at 7).perimeter, //*1.5,
 			geometry(movement_graph.edges at 8).perimeter,
 			geometry(movement_graph.edges at 9).perimeter
 		];
@@ -121,7 +121,7 @@ species robot skills: [moving]{
 	user_command "Send Battery Warning" action: battery_warning;
 	
 	
-	// graph mg; // The local copy of the graph that the robot has TODO: Think about this is still needed
+	// graph mg; // The local copy of the graph that the robot has
 	point target; // The next point the robot will move to.
 	path route; // The route that the robot will take to the target.
 	rgb aspect_color; // The color of the robot.
@@ -391,7 +391,7 @@ species robot skills: [moving]{
 	}
 	
 	// TODO: Fine Tune this value to adjust how long the robot can run on battery.
-	reflex battery_drained when: distance > 300 and not battery_low {
+	reflex battery_drained when: distance > 10000 and not battery_low {
 		do battery_warning;
 	}
 	
@@ -446,10 +446,10 @@ species controller {
 	
 	action add_task {
 		// Ask the user for the specific new task to add.
-		map<string,unknown> values <- user_input_dialog([enter('Pickup', 0), enter('Dropoff', 0), enter('Earliest pick-up', 0), enter('Latest drop-off', 1000)]); 
-		tasks <- tasks + [values at "Pickup", values at "Dropoff", values at "Earliest pick-up", values at "Latest drop-off"];
-		
-		if log_level <= DEBUG { write "Task added: " + tasks; }
+		map<string,unknown> values <- user_input_dialog([enter('Pickup', 0), enter('Dropoff', 0), enter('Earliest pick-up', 0), enter('Latest drop-off', 1000)]);
+		list<int> temp_task <-  [values at "Pickup", values at "Dropoff", values at "Earliest pick-up", values at "Latest drop-off"];
+		tasks <- tasks + [temp_task];
+		if log_level <= DEPLOY { write "Task added: " + temp_task; }
 		do divide_tasks;
 	}
 	
@@ -525,10 +525,11 @@ experiment MyExperiment type: gui {
 	// Remove all the obstacles.
 	action clean_obstacles{	
 		if log_level <= DEPLOY { write "All obstacles have been cleaered"; }
-		 
+		
+		if length(obstacle) != 0{
 		ask obstacle  {
 			do die;
-		}
+		}}
 		dynamic_graph <- movement_graph;
 		dynamic_weights <- edge_weights;
 		
