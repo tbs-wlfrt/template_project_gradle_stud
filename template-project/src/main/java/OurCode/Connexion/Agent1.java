@@ -116,6 +116,7 @@ public class Agent1 extends Agent {
                     robotPath = nodesAndPath.get(1);
                     send_message(robotPath);
                 } else if (content.startsWith("OBSTACLE")) {
+                    System.out.println("Robot detected obstacle, checking if other robot...");
                     boolean isOtherRobot = false;
                     // calculate distance of our robot and other robot
                     try {
@@ -173,11 +174,10 @@ public class Agent1 extends Agent {
         // add the obstacle to the links to avoid
         linksToAvoid.add(Set.of(departureNode, problemNode));
 
-        // calculate the path to the destination node without traversing the obstacle
-        nodesAndPath = warehouseBlueprint.calcNextPath(departureNode, destinationNode, linksToAvoid);
+        // calculate the path to the destination node without traversing the obstacle (starting from problem node so directions are relative to robot after rotating 180 degrees)
+        nodesAndPath = warehouseBlueprint.calcNextPath(problemNode, destinationNode, linksToAvoid);
         robotPath = nodesAndPath.get(1);
         send_message(robotPath);
-        System.out.println("Robot detected obstacle, checking if other robot...");
     }
 
 
