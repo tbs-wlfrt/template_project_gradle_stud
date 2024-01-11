@@ -2,37 +2,47 @@ package OurCode.Connexion;
 
 import OurCode.Devices.Device;
 import OurCode.Helpers.LocationMessageParser;
+import OurCode.Helpers.WarehouseBlueprint;
 import OurCode.UWB.helpers.Point2D;
 import jade.core.Agent;
-import jade.lang.acl.ACLMessage;
 import jade.core.behaviours.*;
-import static jade.lang.acl.ACLMessage.INFORM;
 import jade.core.AID;
 
+import jade.lang.acl.ACLMessage;
+import static jade.lang.acl.ACLMessage.INFORM;
+
+import java.util.LinkedList;
 import java.util.Objects;
+import java.util.Queue;
+import java.util.Set;
 
 
 public class Agent1 extends Agent {
     String RobotAgentAPI = "RobotAgent@192.168.0.158:1099/JADE";
-//    String RobotAgentAPI = "1@192.168.0.158:1099/JADE";
     String robotPath;
-    String subscriberAPI = "ControlCenterAgent@192.168.0.159:1099";
     static String tagID = "685C";
 
-    //String RobotAgentAPI = "RobotAgent";
+
+    /**
+     * TIP: Check WarehouseBlueprint to see how the warehouse is represented
+     * a stack of pair of work items in the format:
+     * (crateNode, dropOffNode)
+     */
+    private static final Queue<Set<Integer>> workItems = new LinkedList<>();
+    static {
+        workItems.add(Set.of(1, 2));
+        workItems.add(Set.of(3, 4));
+        workItems.add(Set.of(5, 6));
+        workItems.add(Set.of(7, 1));
+    }
+    // initialize warehouse blueprint
+
     @Override
     protected void setup() {
         System.out.println("local name" + getAID().getLocalName());
         System.out.println("GloBal name" + getAID().getName());
-
-        /*
-        ACLMessage messageTemplate = new ACLMessage(INFORM);
-        messageTemplate.addReceiver(new AID(RobotAgentAPI,AID.ISGUID));
-
-         */
         addBehaviour(message_recieve);
     }
-
     TickerBehaviour message_recieve = new TickerBehaviour(this, 1000) {
         public void onTick() {
             ACLMessage msg = receive();
@@ -74,7 +84,6 @@ public class Agent1 extends Agent {
                         System.out.println("Robot finished charging, calculating path to next crate...");
                         break;
 
-
                     default:
                         System.out.println("Recieved unexpected message from robot: " + msg.getContent());
                         break;
@@ -98,5 +107,7 @@ public class Agent1 extends Agent {
         msg.setContent(content);
         send(msg);
     }
+
+
 }
 
