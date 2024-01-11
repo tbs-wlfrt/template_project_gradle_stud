@@ -1,12 +1,6 @@
 package OurCode.Helpers;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.Map;
-import java.util.Set;
-import java.util.Queue;
-import java.util.Arrays;
+import java.util.*;
 
 public class WarehouseBlueprint {
     /** current_blueprint
@@ -43,17 +37,50 @@ public class WarehouseBlueprint {
      * nextNode
      * linksToAvoid: a set of links to avoid, for example: (1, 2) this means avoid the link from 1 to 2
      */
-    public String bfs(int currentNode, int nextNode, Set<Set<Integer>> linksToAvoid){
+//    public String bfs(int currentNode, int nextNode, Set<Set<Integer>> linksToAvoid){
+//        Set<Integer> seen = new HashSet<>();
+//        Queue<Integer> queue = new LinkedList<>();
+//        Map<Integer, String> paths = new HashMap<>();
+//
+//        queue.add(currentNode);
+//        paths.put(currentNode, "");
+//
+//        while (!queue.isEmpty()) {
+//            int node = queue.poll();
+//            String path = paths.get(node);
+//
+//            if (node == nextNode) {
+//                return path;
+//            }
+//
+//            if (!seen.contains(node)) {
+//                seen.add(node);
+//                for (Map.Entry<String, Integer> neighbor : relations.get(node).entrySet()) {
+//                    if (!seen.contains(neighbor.getValue())) {
+//                        // Check if the link from node to neighbor is in the linksToAvoid set
+//                        if (!linksToAvoid.contains(new HashSet<>(Arrays.asList(node, neighbor.getValue())))) {
+//                            queue.add(neighbor.getValue());
+//                            paths.putIfAbsent(neighbor.getValue(), path + neighbor.getKey());
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//
+//        return null;
+//    }
+
+    public List<String> bfs(int currentNode, int nextNode, Set<Set<Integer>> linksToAvoid){
         Set<Integer> seen = new HashSet<>();
         Queue<Integer> queue = new LinkedList<>();
-        Map<Integer, String> paths = new HashMap<>();
+        Map<Integer, List<String>> paths = new HashMap<>();
 
         queue.add(currentNode);
-        paths.put(currentNode, "");
+        paths.put(currentNode, new ArrayList<>());
 
         while (!queue.isEmpty()) {
             int node = queue.poll();
-            String path = paths.get(node);
+            List<String> path = new ArrayList<>(paths.get(node));
 
             if (node == nextNode) {
                 return path;
@@ -66,7 +93,9 @@ public class WarehouseBlueprint {
                         // Check if the link from node to neighbor is in the linksToAvoid set
                         if (!linksToAvoid.contains(new HashSet<>(Arrays.asList(node, neighbor.getValue())))) {
                             queue.add(neighbor.getValue());
-                            paths.putIfAbsent(neighbor.getValue(), path + neighbor.getKey());
+                            List<String> newPath = new ArrayList<>(path);
+                            newPath.add(node + ":" + neighbor.getKey());
+                            paths.putIfAbsent(neighbor.getValue(), newPath);
                         }
                     }
                 }
@@ -75,12 +104,25 @@ public class WarehouseBlueprint {
 
         return null;
     }
-    public String calcNextPath(int currentNode, int nextNode, Set<Set<Integer>> linksToAvoid ) {
+
+    public List<String> calcNextPath(int currentNode, int nextNode, Set<Set<Integer>> linksToAvoid ) {
         // check if linksToAvoid is null, if so, set it to an empty set
         if (linksToAvoid == null) {
             linksToAvoid = new HashSet<>();
         }
-        String path = bfs(currentNode, nextNode, linksToAvoid);
+        List<String> res = bfs(currentNode, nextNode, linksToAvoid);
+        // print strings in the list res
+        String nodes = "";
+        String cardinalDirections = "";
+        for (String s : res) {
+            String[] arr = s.split(":");
+            nodes += arr[0];
+            cardinalDirections += arr[1];
+        }
+
+        // there is a comma delimter in the path, split it and store it in two variables
+        // print path
+
         /**
          * Now we have path, which contains the directions necessary to get to the destination node
          * the problem is that this is in the format of "EESW" for example, which is not the format we want
@@ -91,7 +133,7 @@ public class WarehouseBlueprint {
 
         String robotPath = "";
         String robotOrientation = "N";
-        char[] pathArray = path.toCharArray();
+        char[] pathArray = cardinalDirections.toCharArray();
         for (char direction : pathArray) {
             switch (robotOrientation) {
                 case "N":
@@ -172,8 +214,12 @@ public class WarehouseBlueprint {
                     break;
             }
         }
-        return robotPath;  // Return null if there is no path to nextNode
+        // return nodes and robotPath
+        return Arrays.asList(nodes, robotPath);
     }
+
+
+
 
     public static void main(String[] args) {
         WarehouseBlueprint blueprint = new WarehouseBlueprint();
@@ -183,7 +229,11 @@ public class WarehouseBlueprint {
         Set<Set<Integer>> linksToAvoid = new HashSet<>();
         linksToAvoid.add(new HashSet<>(Arrays.asList(7, 6)));
         linksToAvoid.add(new HashSet<>(Arrays.asList(3, 4)));
-        String path = blueprint.calcNextPath(curr, next, linksToAvoid);
+        List<String> nodesAndPath = blueprint.calcNextPath(curr, next, linksToAvoid);
+        String path = nodesAndPath.get(1);
+        String nodes = nodesAndPath.get(0);
+        // print nodes
+        System.out.println("Nodes: " + nodes);
         System.out.println("Path from node  " + curr + "  to  " + next +"   : " +  path);
     }
 };
