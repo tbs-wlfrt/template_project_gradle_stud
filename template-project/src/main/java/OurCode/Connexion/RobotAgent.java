@@ -79,7 +79,9 @@ public class RobotAgent extends Agent {
         //addBehaviour(init_message);
 
         addBehaviour(askNextPath); // ask for initial location of crate
+
         addBehaviour(follow_line_routine);
+//        addBehaviour(rotate_to_exit);
 
 //        addBehaviour(tck); //
 
@@ -145,14 +147,19 @@ public class RobotAgent extends Agent {
         send(messageTemplate);
     }
 
-    void orientNorth(){
-        try {
-            tag = new TagIdMqtt(tagID);
-            System.out.println("GOT HERE");
-        } catch (MqttException e) {
-            e.printStackTrace();
-        }
+    void orientNorth (){
         System.out.println("Orienting robot North");
+        System.out.println("CURRENT PATH: " + currentPath);
+        if(!currentPath.isEmpty()){
+            System.out.println("PATH NOT EMPTY, SKIPPING ORIENT");
+            return;
+        }
+        if(firstCommand){ //unnecessary to orient for the first command
+            firstCommand = false;
+            Device.stop();
+            return;
+        }
+
         float targetOri = northOrientation;
         float tagOri = tag.getOrientation();
 
@@ -171,7 +178,6 @@ public class RobotAgent extends Agent {
             oriCheck = !(Math.abs(tagOri - targetOri) < 0.17);     //threshold of error for turning (within 10 degrees)
             tagOri = tag.getOrientation();
         }
-
         Device.stop();
     }
 
@@ -224,6 +230,12 @@ public class RobotAgent extends Agent {
         @Override
         public void action() {
             if(desire.equals("crate")){
+                desire = "dropoff";
+            }
+            else if(desire.equals("dropoff")){
+                desire = "crate";
+            }
+            if(desire.equals("crate")){
                 System.out.println("ASKING FOR CRATE PATH");
                 sendMessage("NEXT_CRATE");
             }
@@ -231,7 +243,6 @@ public class RobotAgent extends Agent {
                 System.out.println("ASKING FOR DROPOFF PATH");
                 sendMessage("DROPOFF");
             }
-
         }
     };
 
@@ -272,11 +283,10 @@ public class RobotAgent extends Agent {
                 //if a path is received before the current path is finished, it is because it is rerouting, so rotate 180 degrees before following the path
                 if(!currentPath.isEmpty()){
                     rotateOnLine();
-
                 }
+                currentPath = msg.getContent();
 
                 //any time a new path is recieved, make sure robot is pointing north before starting
-                currentPath = msg.getContent();
             }
 
         }
@@ -302,6 +312,7 @@ public class RobotAgent extends Agent {
         @Override
         public void action() {
             System.out.println("Starting behaviour: follow_line_routine");
+
             Delay.msDelay(100);
             //PID controlled line following behaviour
             try {
@@ -357,87 +368,79 @@ public class RobotAgent extends Agent {
     OneShotBehaviour rotate_to_exit = new OneShotBehaviour() {
         @Override
         public void action() {
-            System.out.println("Starting behaviour: rotate_to_exit");
+
+//            System.out.println("#################\nEntered ROTATE TO EXIT, PATH: "+currentPath);
+//            System.out.println("Starting behaviour: rotate_to_exit");
             System.out.println("atJunction: " + atJunction);
             System.out.println("atCharging: " + atCharging);
-            System.out.println("detected Colour: " + Device.sampleBackColor());
+//            System.out.println("detected Colour: " + Device.sampleBackColor());
             Device.stop();
-            try {
-                tag = new TagIdMqtt(tagID);
-                System.out.println("GOT HERE");
-            } catch (MqttException e) {
-                e.printStackTrace();
-            }
             block(100);
+
             // turn device based on the current path
             float lightIntensity;
             float startOri = tag.getOrientation();
             float targetOri = 0;
+
             if(currentPath.isEmpty()){
-                currentPath = "X";
+                //currentPath = "X";
                 orientNorth();
-                if(desire.equals("crate")){
-                    desire = "dropoff";
+            }
+            else {
+                switch (currentPath.charAt(0)) {
+                    case 'L':
+                        System.out.println("Turning Left");
+                        Device.startTurnLeft(motorsFullSpeed / 4);
+                        targetOri = (startOri - ((float) Math.PI / 2)) - (steerCorrection * 10);
+
+                        break;
+                    case 'R':
+                        System.out.println("Turning Right");
+                        Device.startTurnRight(motorsFullSpeed / 4);
+                        targetOri = (startOri + ((float) Math.PI / 2) - steerCorrection) % (2 * (float) Math.PI);
+                        break;
+                    case 'B':
+                        System.out.println("Turning 180 degrees");
+                        Device.startTurnLeft(motorsFullSpeed / 4);
+                        targetOri = (startOri + (float) Math.PI) + (steerCorrection * 2) % (2 * (float) Math.PI);
+                        break;
+                    default:
+                        break;
                 }
-                else if(desire.equals("dropoff")){
-                    desire = "crate";
+
+                if (!(currentPath.charAt(0) == 'F')||!(currentPath.charAt(0) == 'X')) {
+                    System.out.println("FINDING LINE");
+                    if (targetOri < 0) {
+                        targetOri = targetOri + (float) Math.PI * 2;
+                    }
+
+                    float tagOri = tag.getOrientation();
+                    System.out.println("Start Orientation: " + startOri);
+                    System.out.println("target Orientation: " + targetOri);
+
+                    boolean colCheck = true;
+                    boolean oriCheck = true;
+
+                    Device.sync(400);
+
+                    // given startOriDeg and tagOriDeg; keep turning until 90 degrees has been turned
+                    while (oriCheck && colCheck) {         //threshold of error for turning (within 10 degrees)
+                        Device.sync();
+                        oriCheck = !(Math.abs(tagOri - targetOri) < 0.17);
+                        lightIntensity = Device.sampleLightIntensity();
+                        colCheck = !(colorPID.fullBlack <= lightIntensity && lightIntensity < (colorPID.setPoint + 5));
+
+                        tagOri = tag.getOrientation();
+//                        System.out.println("light intensity:" + lightIntensity);
+                    }
+                    System.out.println("colCheck: " + colCheck + "    oriCheck: " + oriCheck);
+                    System.out.println("FOUND LINE");
+                    //if stopping due to edge detection, keep rotating a little further to stop on middle of line
+                    if ((!colCheck) && (currentPath.charAt(0) == 'L')) {
+                        Device.sync(40);
+                    }
                 }
             }
-            switch (currentPath.charAt(0)){
-                case 'L':
-                    System.out.println("Turning Left");
-                    Device.startTurnLeft(motorsFullSpeed/4);
-                    targetOri = (startOri - ((float)Math.PI/2)) - (steerCorrection*10);
-
-                    break;
-                case 'R':
-                    System.out.println("Turning Right");
-                    Device.startTurnRight(motorsFullSpeed/4);
-                    targetOri = (startOri + ((float)Math.PI/2) - steerCorrection) % (2*(float)Math.PI);
-                    break;
-                case 'B':
-                    System.out.println("Turning 180 degrees");
-                    Device.startTurnLeft(motorsFullSpeed/4);
-                    targetOri = (startOri + (float)Math.PI) + (steerCorrection*2) % (2*(float)Math.PI);
-                    break;
-                default:
-                    break;
-            }
-
-            if(!(currentPath.charAt(0) == 'F')){
-                if(targetOri < 0){
-                    targetOri = targetOri + (float)Math.PI * 2;
-                }
-
-                float tagOri = tag.getOrientation();
-                System.out.println("Start Orientation: " +startOri);
-                System.out.println("target Orientation: " +targetOri);
-
-                boolean colCheck = true;
-                boolean oriCheck = true;
-
-                Device.sync(400);
-
-                // given startOriDeg and tagOriDeg; keep turning until 90 degrees has been turned
-                while(oriCheck && colCheck){         //threshold of error for turning (within 10 degrees)
-                    Device.sync();
-                    oriCheck = !(Math.abs(tagOri - targetOri) < 0.17);
-                    lightIntensity = Device.sampleLightIntensity();
-                    colCheck = !(colorPID.fullBlack <= lightIntensity && lightIntensity < (colorPID.setPoint+5));
-
-                    tagOri = tag.getOrientation();
-                    System.out.println("light intensity:" + lightIntensity);
-                }
-                System.out.println("colCheck: " + colCheck + "    oriCheck: " + oriCheck);
-
-                //if stopping due to edge detection, keep rotating a little further to stop on middle of line
-                if ((!colCheck) && (currentPath.charAt(0) == 'L')){
-                    Device.sync(40);
-                }
-
-
-            }
-
             Device.stop();
 
             // reset the values for the colorPID
@@ -445,6 +448,7 @@ public class RobotAgent extends Agent {
         }
 
         public int onEnd() {
+            System.out.println("Exiting Rotate_TO_EXIT");
             // pop first character of next path
             currentPath = currentPath.substring(1);
 
@@ -452,13 +456,16 @@ public class RobotAgent extends Agent {
 //            if (currentPath.length() == 0){
 //                addBehaviour(askNextCrate); // ask for next location of crate
 //            }
+            if(!currentPath.isEmpty()){
+                addBehaviour(go_forward);
+                currentPath = currentPath.substring(1);
+
+            }
 
             atJunction = false;
             atCharging = false;
             // TODO: RE ADD THIS CHRISTOPHER NOLAN
-            if(!currentPath.isEmpty()){
-                addBehaviour(go_forward);
-            }
+
             addBehaviour(follow_line_routine);
             //TODO: insert section that makes sure we dont think we are at a different junction becasue we havent moved
             return super.onEnd();
@@ -476,9 +483,11 @@ public class RobotAgent extends Agent {
     OneShotBehaviour go_forward = new OneShotBehaviour() {
         @Override
         public void action() {
+            System.out.println("###################\n GO_FORWARD");
             try {
                 Device.setMotorSpeeds(motorsFullSpeed, motorsFullSpeed);
                 Device.moveForward(850);
+//                Device.moveForward(1500);
                 System.out.println("Forward");
             } catch (Exception e) {
                 e.printStackTrace();
