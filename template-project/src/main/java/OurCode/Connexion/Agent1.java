@@ -24,6 +24,7 @@ public class Agent1 extends Agent {
     static String tagID = "685C";
     static TagIdMqtt myRobotTag;
     double robotDistanceThreshold = 40;
+    /*
     static {
         try {
             myRobotTag = new TagIdMqtt(tagID);
@@ -31,9 +32,11 @@ public class Agent1 extends Agent {
             e.printStackTrace();
         }
     }
+     */
     // OTHER GROUPS ROBOT TAG ID
     static String otherRobotTagID = "975C";
     static TagIdMqtt otherRobotTag;
+    /*
     static {
         try {
             otherRobotTag = new TagIdMqtt(otherRobotTagID);
@@ -41,6 +44,7 @@ public class Agent1 extends Agent {
             e.printStackTrace();
         }
     }
+     */
 
     /**
      * TIP: Check WarehouseBlueprint to see how the warehouse is represented
@@ -49,7 +53,7 @@ public class Agent1 extends Agent {
      */
     private static final Queue<Set<Integer>> workItems = new LinkedList<>();
     static {
-        workItems.add(Set.of(1, 2));
+        workItems.add(Set.of(3, 2));
         workItems.add(Set.of(3, 4));
         workItems.add(Set.of(5, 6));
         workItems.add(Set.of(7, 1));
@@ -117,6 +121,17 @@ public class Agent1 extends Agent {
                     send_message(robotPath);
                 } else if (content.startsWith("OBSTACLE")) {
                     System.out.println("Robot detected obstacle, checking if other robot...");
+                    try {
+                        myRobotTag = new TagIdMqtt(tagID);
+                    } catch (MqttException e) {
+                        e.printStackTrace();
+                    }
+                    /*
+                    try {
+                        otherRobotTag = new TagIdMqtt(otherRobotTagID);
+                    } catch (MqttException e) {
+                        e.printStackTrace();
+                    }
                     boolean isOtherRobot = false;
                     // calculate distance of our robot and other robot
                     try {
@@ -127,8 +142,18 @@ public class Agent1 extends Agent {
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
+
+                     */
+                    boolean isOtherRobot = false;
                     if(!isOtherRobot) {
                         avoidObstacle(content);
+                    }
+                    try {
+                        myRobotTag.shutdown();
+                        //otherRobotTag.shutdown();
+
+                    }catch (Exception e){
+                        e.printStackTrace();
                     }
                 } else {
                     System.out.println("Recieved unexpected message from robot: " + msg.getContent());
@@ -176,7 +201,8 @@ public class Agent1 extends Agent {
 
         // calculate the path to the destination node without traversing the obstacle (starting from problem node so directions are relative to robot after rotating 180 degrees)
         nodesAndPath = warehouseBlueprint.calcNextPath(problemNode, destinationNode, linksToAvoid);
-        robotPath = nodesAndPath.get(1);
+        robotPath = nodesAndPath.get(1).substring(1);
+
         send_message(robotPath);
     }
 

@@ -146,6 +146,12 @@ public class RobotAgent extends Agent {
     }
 
     void orientNorth(){
+        try {
+            tag = new TagIdMqtt(tagID);
+            System.out.println("GOT HERE");
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
         System.out.println("Orienting robot North");
         float targetOri = northOrientation;
         float tagOri = tag.getOrientation();
@@ -170,6 +176,15 @@ public class RobotAgent extends Agent {
     }
 
     void rotateOnLine(){
+        System.out.println("###########################################\n" +
+                "############ROTATING ON LINE###############" +
+                "###########################################\n");
+        try {
+            tag = new TagIdMqtt(tagID);
+            System.out.println("GOT HERE");
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
         float startOri = tag.getOrientation();
         //turning 190 degrees
         Device.startTurnLeft(motorsFullSpeed/4);
@@ -255,7 +270,10 @@ public class RobotAgent extends Agent {
                 // Robot only recves paths
 
                 //if a path is received before the current path is finished, it is because it is rerouting, so rotate 180 degrees before following the path
-                rotateOnLine();
+                if(!currentPath.isEmpty()){
+                    rotateOnLine();
+
+                }
 
                 //any time a new path is recieved, make sure robot is pointing north before starting
                 currentPath = msg.getContent();
@@ -473,6 +491,7 @@ public class RobotAgent extends Agent {
         @Override
         public void action() {
             try {
+                tag.shutdown();
                 System.out.println("Avoiding obstacle");
                 String response = "";
                 ACLMessage msg;
