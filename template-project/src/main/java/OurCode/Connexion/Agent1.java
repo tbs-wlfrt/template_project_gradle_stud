@@ -6,7 +6,9 @@ import OurCode.UWB.helpers.Point2D;
 import jade.core.Agent;
 import jade.lang.acl.ACLMessage;
 import jade.core.behaviours.*;
+
 import static jade.lang.acl.ACLMessage.INFORM;
+
 import jade.core.AID;
 
 import java.util.Objects;
@@ -14,22 +16,15 @@ import java.util.Objects;
 
 public class Agent1 extends Agent {
     String RobotAgentAPI = "RobotAgent@192.168.0.158:1099/JADE";
-//    String RobotAgentAPI = "1@192.168.0.158:1099/JADE";
+    //    String RobotAgentAPI = "1@192.168.0.158:1099/JADE";
     String robotPath;
     String subscriberAPI = "ControlCenterAgent@192.168.0.159:1099";
     static String tagID = "685C";
 
-    //String RobotAgentAPI = "RobotAgent";
     @Override
     protected void setup() {
         System.out.println("local name" + getAID().getLocalName());
         System.out.println("GloBal name" + getAID().getName());
-
-        /*
-        ACLMessage messageTemplate = new ACLMessage(INFORM);
-        messageTemplate.addReceiver(new AID(RobotAgentAPI,AID.ISGUID));
-
-         */
         addBehaviour(message_recieve);
     }
 
@@ -38,7 +33,7 @@ public class Agent1 extends Agent {
             ACLMessage msg = receive();
             if (msg != null) {
                 System.out.println("Message recieved at agent1:" + msg.getContent());
-                switch (msg.getContent()){
+                switch (msg.getContent()) {
                     case "obstacle detected":
                         System.out.println("Obstacle in front of robot");
                         break;
@@ -60,7 +55,7 @@ public class Agent1 extends Agent {
                         System.out.println("Robot detected obstacle, checking if other robot...");
                         //not implementing logic for another robot - the other controller does this logic
                         boolean otherRobot = false;
-                        if(!otherRobot){
+                        if (!otherRobot) {
                             //hardcoded alternate path
                             System.out.println("Sending alternate path to robot...");
                             robotPath = "BLLLBFRR";
@@ -79,20 +74,11 @@ public class Agent1 extends Agent {
                         System.out.println("Recieved unexpected message from robot: " + msg.getContent());
                         break;
                 }
-                /*
-                //example reactive logic: just acknowledge message recieved
-                ACLMessage messageTemplate = new ACLMessage(INFORM);
-                messageTemplate.addReceiver(new AID(RobotAgentAPI, AID.ISGUID));
-                messageTemplate.setContent("Acknowledge message: " + msg.getContent());
-                send(messageTemplate);
-
-                 */
-
             }
         }
     };
 
-    private void send_message(String content){
+    private void send_message(String content) {
         ACLMessage msg = new ACLMessage(INFORM);
         msg.addReceiver(new AID(RobotAgentAPI, AID.ISGUID));
         msg.setContent(content);

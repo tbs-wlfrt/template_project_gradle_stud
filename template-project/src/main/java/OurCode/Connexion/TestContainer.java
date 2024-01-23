@@ -19,7 +19,7 @@ public class TestContainer {
             ProfileImpl p = new ProfileImpl(target, 1099, null, false);
 
             p.setParameter(Profile.LOCAL_HOST, source);
-            p.setParameter(Profile.LOCAL_PORT,"1099");
+            p.setParameter(Profile.LOCAL_PORT, "1099");
 
 
             AgentContainer agentContainer = runtime.createAgentContainer(p);
