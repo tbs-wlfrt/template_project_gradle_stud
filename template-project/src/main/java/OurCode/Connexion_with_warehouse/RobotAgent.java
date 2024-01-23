@@ -1,4 +1,4 @@
-package OurCode.Connexion;
+package OurCode.Connexion_with_warehouse;
 
 import OurCode.Devices.Device;
 import OurCode.Helpers.ColorPIDController;
@@ -40,14 +40,13 @@ public class RobotAgent extends Agent {
     //float orientation;
 
     int junctionColor = 5;      //red
-    int chargingColor1 = 2;      //blue
-    int chargingColor2 = 3;      //blue
 
 
     Boolean atJunction = false;
     Boolean atCharging = false;
     Boolean obstacleDetected = false;
     float obstacleDist = 15;
+    float northOrientation;
 
     String jadeApi = "Agent1@192.168.0.158:1099/JADE";
     //String jadeApi = "Agent1";
@@ -55,12 +54,8 @@ public class RobotAgent extends Agent {
     String subscriberAPI = "ControlCenterAgent@192.168.0.159:1099/JADE";
 
 
-
-
-
-    String mission_type = ""; // the mission the agent has to complete
-
     String currentPath = ""; // the current path the agent is taking
+    String desire = "crate";
 
     static String tagID = "685C";
     static TagIdMqtt tag;
@@ -75,17 +70,15 @@ public class RobotAgent extends Agent {
 
 
     static int ultrasonic_front = 0;
-    //static int ultrasonic_left = 0;
-    //static int ultrasonic_right = 0;
-
 
     protected void setup() {
 
+        addBehaviour(initialize);
         addBehaviour(message_recieve); // ticker
 
         //addBehaviour(init_message);
 
-        addBehaviour(askNextCrate); // ask for initial location of crate
+        addBehaviour(askNextPath); // ask for initial location of crate
         addBehaviour(follow_line_routine);
 
 //        addBehaviour(tck); //
@@ -152,16 +145,97 @@ public class RobotAgent extends Agent {
         send(messageTemplate);
     }
 
+    void orientNorth(){
+        try {
+            tag = new TagIdMqtt(tagID);
+            System.out.println("GOT HERE");
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
+        System.out.println("Orienting robot North");
+        float targetOri = northOrientation;
+        float tagOri = tag.getOrientation();
 
+        //starting to turn in fastest direction
+        if(tagOri > Math.PI){
+            Device.startTurnLeft(motorsFullSpeed/4);
+        }
+        else{
+            Device.startTurnRight(motorsFullSpeed/4);
+        }
 
+        boolean oriCheck = true;
+        // given targetOri and tagOri; keep turning until facing north
+        while(oriCheck){
+            Device.sync();
+            oriCheck = !(Math.abs(tagOri - targetOri) < 0.17);     //threshold of error for turning (within 10 degrees)
+            tagOri = tag.getOrientation();
+        }
 
-    OneShotBehaviour askNextCrate = new OneShotBehaviour() {
+        Device.stop();
+    }
+
+    void rotateOnLine(){
+        System.out.println("###########################################\n" +
+                "############ROTATING ON LINE###############" +
+                "###########################################\n");
+        try {
+            tag = new TagIdMqtt(tagID);
+            System.out.println("GOT HERE");
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
+        float startOri = tag.getOrientation();
+        //turning 190 degrees
+        Device.startTurnLeft(motorsFullSpeed/4);
+        float targetOri = (startOri + (float)Math.PI) + (steerCorrection*2) % (2*(float)Math.PI);
+
+        if(targetOri < 0){
+            targetOri = targetOri + (float)Math.PI * 2;
+        }
+
+        float tagOri = tag.getOrientation();
+        System.out.println("Start Orientation: " +startOri);
+        System.out.println("target Orientation: " +targetOri);
+
+        boolean oriCheck = true;
+        Device.sync(400);
+
+        // given tagOri and targetOri; keep turning until 180 degrees has been turned
+        while(oriCheck){         //threshold of error for turning (within 10 degrees)
+            Device.sync();
+            oriCheck = !(Math.abs(tagOri - targetOri) < 0.17);
+            tagOri = tag.getOrientation();
+        }
+
+        Device.stop();
+
+    }
+
+    OneShotBehaviour initialize = new OneShotBehaviour() {
         @Override
         public void action() {
-            System.out.println("ASKING FOR CRATE PATH");
-            sendMessage("NEXT_CRATE");
+            System.out.println("Initialising robot, recording North orientation");
+            northOrientation = tag.getOrientation();
         }
     };
+
+    OneShotBehaviour askNextPath = new OneShotBehaviour() {
+        @Override
+        public void action() {
+            if(desire.equals("crate")){
+                System.out.println("ASKING FOR CRATE PATH");
+                sendMessage("NEXT_CRATE");
+            }
+            else if(desire.equals("dropoff")){
+                System.out.println("ASKING FOR DROPOFF PATH");
+                sendMessage("DROPOFF");
+            }
+
+        }
+    };
+
+
 
     //every 1s sends the location info to the central monitor
     TickerBehaviour tck = new TickerBehaviour(this, 1000) {
@@ -192,19 +266,19 @@ public class RobotAgent extends Agent {
             ACLMessage msg = receive();
             if (msg != null) {
                 System.out.println("Message recieved at RobotAgent: " + msg.getContent());
-                //TODO: insert logic for reacting to messages
+                //logic for reacting to messages
                 // Robot only recves paths
+
+                //if a path is received before the current path is finished, it is because it is rerouting, so rotate 180 degrees before following the path
+                if(!currentPath.isEmpty()){
+                    rotateOnLine();
+
+                }
+
+                //any time a new path is recieved, make sure robot is pointing north before starting
                 currentPath = msg.getContent();
             }
 
-        }
-    };
-
-    // oneshot move forward behavior
-    OneShotBehaviour move_forward = new OneShotBehaviour() {
-        @Override
-        public void action() {
-            Device.moveForward(100);
         }
     };
 
@@ -265,7 +339,7 @@ public class RobotAgent extends Agent {
         @Override
         public int onEnd() {
             if (obstacleDetected){
-                sendMessage("OBSTACLE");
+                sendMessage("OBSTACLE,"+currentPath);
                 addBehaviour(avoid_obstacle);
             }
             else if ((!atJunction) && (!atCharging))
@@ -277,66 +351,6 @@ public class RobotAgent extends Agent {
 
     };
 
-    /*
-    OneShotBehaviour follow_line_routine_right = new OneShotBehaviour() {
-        @Override
-        public void action() {
-            //System.out.println("Starting behaviour: follow_line_routine");
-            Delay.msDelay(100);
-            //PID controlled line following behaviour
-            try {
-                // detect if robot is at a junction
-                atJunction = Device.sampleBackColor() == junctionColor;
-                if(!atJunction){
-                    //System.out.println("+++++++++++++++Message sent++++++++++++++++++=");
-                    //get light sensor reading from device
-                    float sample = Device.sampleLightIntensity();
-                    Device.sync(20);
-                    //controller.updateVal(sample);
-                    int[] motorSpeedsReduction = colorPID.recalibrate(sample);
-                    //System.out.println("\nGOT: " + sample + "" + "\nMotorspeeds:" + motorSpeedsReduction[0] + ", " + motorSpeedsReduction[1]);
-                    //set device motor speeds to new values calculated by PID controller
-                    Device.setMotorSpeeds(motorsFullSpeed-motorSpeedsReduction[0], motorsFullSpeed-motorSpeedsReduction[1]);
-                    Device.startMoveForward();
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-
-        @Override
-        public int onEnd() {
-            if (!atJunction)
-                addBehaviour(follow_line_routine_right);
-            else
-                addBehaviour(rotate_right_to_exit);
-            return super.onEnd();
-        }
-    };
-    */
-
-    //checks if the robot is currently over a junction (with either of the color sensors)
-    TickerBehaviour check_junction = new TickerBehaviour(this, 100) {
-        @Override
-        protected void onTick() {
-            /*
-            steps:
-            1) sample both colour sensors, check if colour is junctionColour
-            2) if front sensor reads junctionColour, set both motors to same speed and go forward.
-            3) if back sensor read junctionColour, stop, and set atJunction to true.
-             */
-
-            //TODO: add code for checking with front sensor.
-            //behaviour for if back sensor reads junctionColor
-            int sampledColor = Device.sampleBackColor();
-            //System.out.println("Sampled colour: " + sampledColor);
-            if (sampledColor == junctionColor){
-                Device.stop();
-                atJunction = true;
-            }
-
-        }
-    };
 
 
     //behaviour used when the robot is currently at a junction (node) and needs to turn to its exit
@@ -361,6 +375,13 @@ public class RobotAgent extends Agent {
             float targetOri = 0;
             if(currentPath.isEmpty()){
                 currentPath = "X";
+                orientNorth();
+                if(desire.equals("crate")){
+                    desire = "dropoff";
+                }
+                else if(desire.equals("dropoff")){
+                    desire = "crate";
+                }
             }
             switch (currentPath.charAt(0)){
                 case 'L':
@@ -435,141 +456,22 @@ public class RobotAgent extends Agent {
             atJunction = false;
             atCharging = false;
             // TODO: RE ADD THIS CHRISTOPHER NOLAN
-            addBehaviour(go_forward);
+            if(!currentPath.isEmpty()){
+                addBehaviour(go_forward);
+            }
             addBehaviour(follow_line_routine);
             //TODO: insert section that makes sure we dont think we are at a different junction becasue we havent moved
             return super.onEnd();
         }
     };
 
-    /*
-    //behaviour used when the robot is currently at a junction (node) and needs to turn to its exit
-    OneShotBehaviour rotate_right_to_exit = new OneShotBehaviour() {
-        @Override
-        public void action() {
-            // Keeps turning incrementally until the front sensor reads black
-            //System.out.println("Starting behaviour: rotate_to_exit");
-            Device.stop();
-            //TODO: update so that robot turns left or right according to next desired node.
-            //if next exit is left, rotate left until front sensor reads black
-            float lightIntensity = 100;
-            Device.turnRightInPlace(60); // defines the speed of the turn
-            Device.startTurnRight(motorsFullSpeed/4);
-            // check if it's between full black and set point
-            while (!(colorPID.fullBlack <= lightIntensity && lightIntensity < (colorPID.setPoint+5))){
-                //Device.turnLeftInPlace(100);
-                Device.sync(20);
-                lightIntensity = Device.sampleLightIntensity();
-                //System.out.println(lightIntensity);
-            }
-            Device.stop();
-
-            // rotate a little bit to left to make sure we are on the line
-            Device.turnLeftInPlace(60);
-            Device.startTurnRight(motorsFullSpeed/4);
-            Delay.msDelay(500);
-            Device.stop();
-            // reset the values for the colorPID
-            colorPID.resetValsOnTurn();
-        }
-
-        public int onEnd() {
-            atJunction = false;
-            addBehaviour(go_forward);
-            addBehaviour(follow_line_routine_right);
-            //TODO: insert section that makes sure we dont think we are at a different junction becasue we havent moved
-            return super.onEnd();
-        }
-    };
-    */
 
     /*
         BEHAVIOUR DEFINITIONS
      */
 
-    /*
-    // cyclicly check if there's an obstacle in front of the agent
-    CyclicBehaviour obstacle_detection = new CyclicBehaviour() {
-        @Override
-        public void action() {
-            try{
-                int freeDistance = Device.sampleFrontDistance();
-                obstacleExists = freeDistance < obstacleDistanceThreshold;
-            }
-            catch(Exception e){
-                e.printStackTrace();
-            }
-        }
-    };
-
-     */
-
-    TickerBehaviour obstacle_detection = new TickerBehaviour(this, 200) {
-        @Override
-        protected void onTick() {
-            try{
-                int freeDistance = Device.sampleFrontDistance();
-                obstacleExists = freeDistance < obstacleDistanceThreshold;
-                if (obstacleExists){
-                    sendMessage("OBSTACLE");
-                }
-            }
-            catch(Exception e){
-                e.printStackTrace();
-            }
-
-        }
-    };
 
 
-
-    /*
-    OneShotBehaviour sendRot = new OneShotBehaviour() {
-        @Override
-        public void action() {
-
-            System.out.println("Rotten runs");
-            //  while (in_transit){
-            // Random number
-            Random rand = new Random();
-            int upperbound = 25;
-            int int_random = rand.nextInt(upperbound);
-            if (int_random == 10) {
-//                     Send a rot message
-                //     ACLMessage messageTemplate = new ACLMessage(INFORM);
-                //     messageTemplate.addReceiver(new AID("R2@192.168.0.136:1099/JADE",AID.ISGUID));
-                //      messageTemplate.setContent("rotten");
-                //     send(messageTemplate);
-                //       System.out.println("Rotten");
-            }
-            // }
-        }
-    };
-
-     */
-
-    /*
-    // takes 2 params, send a message every tick
-    TickerBehaviour lowBattery = new TickerBehaviour(this, 100) {
-        @Override
-        protected void onTick() {
-            // Random number
-            Random rand = new Random();
-            int upperbound = 10;
-            int int_random = rand.nextInt(upperbound);
-            if (int_random == 0) {
-                // Send a low battery message
-                //   ACLMessage messageTemplate = new ACLMessage(INFORM);
-                //    messageTemplate.addReceiver(new AID("R2@192.168.0.136:1099/JADE",AID.ISGUID));
-                //    messageTemplate.setContent("battery");
-                //     send(messageTemplate);
-
-
-                //     System.out.println("Low battery");
-            }
-        }
-    };
-     */
     //behaviours for robot movement - too fine grained?
     OneShotBehaviour go_forward = new OneShotBehaviour() {
         @Override
@@ -583,58 +485,52 @@ public class RobotAgent extends Agent {
             }
         }
     };
-    /*
 
-    OneShotBehaviour go_backward = new OneShotBehaviour() {
+
+    OneShotBehaviour avoid_obstacle = new OneShotBehaviour() {
         @Override
         public void action() {
             try {
-                Device.moveBackwards(500);
-                System.out.println("Backward");
+                tag.shutdown();
+                System.out.println("Avoiding obstacle");
+                String response = "";
+                ACLMessage msg;
+
+                // sleep for 1 second
+                block(1000);
+
+                // try receiving message otherwise add avoid obstacle behaviour
+                try {
+                    msg = receive();
+                    response = msg.getContent();
+                    if(response.equals("WAIT")){
+                        Device.sync(50);
+                        addBehaviour(follow_line_routine);
+                    }
+                    else{
+                        currentPath = response;
+                        //follow new path
+                        addBehaviour(rotate_to_exit);
+                    }
+                } catch (Exception e) {
+                    addBehaviour(avoid_obstacle);
+                    // step out of this behaviour
+                }
+
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
-    };
 
-    OneShotBehaviour turn_right = new OneShotBehaviour() {
         @Override
-        public void action() {
-            try {
-                Device.turnLeftInPlace(500);
-                System.out.println("Right");
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+        public int onEnd() {
+            obstacleDetected = false;
+            return super.onEnd();
         }
     };
 
-    OneShotBehaviour turn_left = new OneShotBehaviour() {
-        @Override
-        public void action() {
-            try {
-                Device.turnRightInPlace(500);
-                System.out.println("Left");
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-    };
-
-     */
 
 
-    OneShotBehaviour stop = new OneShotBehaviour() {
-        @Override
-        public void action() {
-            try {
-                Device.stop();
-//                System.out.println("Stop");
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-    };
 /*
 
 
@@ -687,102 +583,5 @@ public class RobotAgent extends Agent {
         }
     };
     */
-
-
-    Behaviour wait = new Behaviour() {
-        Boolean waiting = true;
-
-        @Override
-        public void action() {
-            block(delay);
-            waiting = false;
-        }
-
-        @Override
-        public boolean done() {
-            return !waiting;
-        }
-    };
-
-    /*
-    OneShotBehaviour message_send = new OneShotBehaviour() {
-        @Override
-        public void action() {
-            if (mission_type.equals("pickup")) {
-                onMission = true;
-            }
-
-            addBehaviour(sendRot);
-
-            ACLMessage messageTemplate = new ACLMessage(INFORM);
-            messageTemplate.addReceiver(new AID("Agent1@192.168.0.117:1099/JADE", AID.ISGUID));
-            messageTemplate.setContent(mission_type + " Completed");
-            send(messageTemplate);
-        }
-    };
-
-     */
-
-    SequentialBehaviour mission = new SequentialBehaviour();
-
-
-
-    OneShotBehaviour start_moving = new OneShotBehaviour() {
-        @Override
-        public void action() {
-            try {
-                System.out.println("Boogie commence...");
-                //Device.startMoveForward();
-                //Delay.msDelay(2000);
-                Device.stop();
-                Device.startMoveForward();
-
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-    };
-
-    OneShotBehaviour avoid_obstacle = new OneShotBehaviour() {
-        @Override
-        public void action() {
-            try {
-                System.out.println("Avoiding obstacle");
-                String response = "";
-                ACLMessage msg;
-
-                // sleep for 1 second
-                block(1000);
-
-                // try receiving message otherwise add avoid obstacle behaviour
-                try {
-                    msg = receive();
-                    response = msg.getContent();
-                    if(response.equals("WAIT")){
-                        Device.sync(50);
-                        addBehaviour(follow_line_routine);
-                    }
-                    else{
-                        currentPath = response;
-                        //follow new path
-                        addBehaviour(rotate_to_exit);
-                    }
-                } catch (Exception e) {
-                    addBehaviour(avoid_obstacle);
-                    // step out of this behaviour
-                }
-
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-
-        @Override
-        public int onEnd() {
-            obstacleDetected = false;
-            return super.onEnd();
-        }
-    };
-
 
 }
