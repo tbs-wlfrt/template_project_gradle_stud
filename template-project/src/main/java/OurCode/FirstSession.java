@@ -1,5 +1,7 @@
 package OurCode;
 
+import OurCode.Helpers.PIDController;
+
 import ev3dev.actuators.lego.motors.EV3MediumRegulatedMotor;
 import ev3dev.sensors.ev3.EV3UltrasonicSensor;
 import lejos.hardware.port.MotorPort;
@@ -161,7 +163,7 @@ public class FirstSession {
 //        int ninetyDegrees = (int)Math.floor(Turner.calculatePivot(90, wheelSize, trackSize));
 
         int speedMultiplier = 40;
-        PIDController pidController = new PIDController(50, 0.5);
+        PIDController pidController = new PIDController(50);
 
         Delay.msDelay(1000); // Needed to wait for the sensor to initialise.
 
@@ -184,7 +186,16 @@ public class FirstSession {
             int distanceValue = (int) sample[0];
             System.out.println("Distance: " + distanceValue);
 
-            /*
+//            PID stuff
+            pidController.updateVals(distanceValue);
+            int speed = (int) Math.min(pidController.recalibrate()*speedMultiplier, 1000);
+            System.out.println("speed: " + speed);
+            motor1.setSpeed(speed); sync();
+            motor2.setSpeed(speed); sync();
+
+            motor2.backward(); sync();
+            motor1.backward(); sync();
+/*
             //avoid obstacle (basic) stuff
             if (distanceValue < 20){
                 stop();
@@ -198,17 +209,6 @@ public class FirstSession {
                 startMoveForward();
             }
             */
-
-//            PID stuff
-            pidController.updateVals(distanceValue);
-            int speed = (int) Math.min(pidController.recalibrate()*speedMultiplier, 1000);
-            System.out.println("speed: " + speed);
-            motor1.setSpeed(speed); sync();
-            motor2.setSpeed(speed); sync();
-
-            motor2.backward(); sync();
-            motor1.backward(); sync();
-
 
 //            //"follow path" stuff
 //            moveForward(2000);
@@ -272,6 +272,6 @@ public class FirstSession {
 //        // turnLeftInPlace(550); // 180
 //         // turnRightInPlace(5000);
 
-      //  return;
+        //  return;
     }
 }
